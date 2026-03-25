@@ -1,0 +1,9 @@
+{
+  "name": "kyutai-mcp",
+  "version": "0.1.0",
+  "description": "FastMCP 3.1 server + SOTA webapp for Kyutai Moshi research and ops",
+  "author": "sandraschi",
+  "tags": ["mcp", "fastmcp", "speech", "tts", "stt", "moshi", "kyutai"],
+  "homepage": "https://github.com/sandraschi/kyutai-mcp"
+}
+

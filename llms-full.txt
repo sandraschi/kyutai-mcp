@@ -1,0 +1,43 @@
+kyutai-mcp (full)
+
+This repository provides:
+
+1) An MCP server (FastMCP 3.1+)
+- Dual transport:
+  - STDIO: IDE integration
+  - HTTP: streamable MCP endpoint on /mcp for local web bridge use
+
+2) A SOTA web dashboard (Vite + React + Tailwind)
+- Fleet blueprint layout: sidebar + topbar + main + logger panel + chat modal
+- Webapp ports:
+  - backend: 10924
+  - frontend: 10925
+
+Tools
+=====
+
+moshi_ops(operation, include_env=False)
+
+Operations:
+- status: server runtime and platform summary
+- local_viability: check GPU/VRAM and show next-step recommendations
+- references: upstream links (FAQ, issues)
+- recommend_runtime: recommended runtime choice for local-first success
+
+Local Moshi viability note (RTX 4090)
+====================================
+
+Upstream indicates that 12GB GPUs can be made to work with tuning, and 8GB GPUs cannot.
+Given RTX 4090 has 24GB VRAM, local runs are expected to be viable, but latency/quality
+depends on runtime backend, quantization, and session length.
+
+References:
+- https://raw.githubusercontent.com/kyutai-labs/moshi/main/FAQ.md
+- https://github.com/kyutai-labs/moshi/issues/54
+
+Troubleshooting
+===============
+
+- If the webapp does not start, run: webapp\\start.ps1
+- If ports are occupied, start.ps1 kills listeners for 10924/10925 before launch.
+

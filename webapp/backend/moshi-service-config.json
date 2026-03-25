@@ -1,0 +1,11 @@
+{
+  "command": "D:\\Dev\\repos\\moshi\\.venv\\Scripts\\python.exe",
+  "args": [
+    "-m",
+    "moshi.server",
+    "--hf-repo",
+    "kyutai/moshiko-pytorch-bf16"
+  ],
+  "cwd": "D:\\Dev\\repos\\moshi",
+  "http_url": "http://127.0.0.1:8998"
+}

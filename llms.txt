@@ -1,0 +1,12 @@
+kyutai-mcp
+
+Scope: FastMCP 3.1+ server + SOTA web dashboard for Kyutai Moshi (speech-to-speech dialogue).
+
+Entry points:
+- README.md
+- llms-full.txt (full tool + ops documentation)
+
+Key URLs:
+- Upstream Moshi repo: https://github.com/kyutai-labs/moshi
+- Moshi FAQ: https://raw.githubusercontent.com/kyutai-labs/moshi/main/FAQ.md
+

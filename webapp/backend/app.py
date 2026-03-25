@@ -1,0 +1,574 @@
+from __future__ import annotations
+
+import os
+import platform
+import shutil
+import subprocess
+import threading
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Literal
+
+import httpx
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+
+from kyutai_mcp.config import DEFAULT_CONFIG
+from kyutai_mcp.server import moshi_ops_impl
+
+
+@dataclass
+class MoshiServiceConfig:
+    command: str
+    args: list[str]
+    cwd: str | None
+    http_url: str
+
+
+@dataclass
+class MoshiServiceState:
+    proc: subprocess.Popen[str] | None
+    log_path: str | None
+    started_at_ms: int | None
+    last_exit_code: int | None
+
+
+_moshi_config = MoshiServiceConfig(
+    command="",
+    args=[],
+    cwd=None,
+    http_url="http://127.0.0.1:8998",
+)
+_moshi_state = MoshiServiceState(proc=None, log_path=None, started_at_ms=None, last_exit_code=None)
+_moshi_lock = threading.Lock()
+_moshi_config_path = Path(__file__).parent / "moshi-service-config.json"
+
+
+class MoshiOpsRequest(BaseModel):
+    operation: Literal["status", "local_viability", "references", "recommend_runtime"]
+    include_env: bool = False
+
+
+class ChatRefineRequest(BaseModel):
+    persona: Literal["reductionist", "debugger", "explainer"] = "reductionist"
+    prompt: str = Field(min_length=1, max_length=20_000)
+    provider: Literal["auto", "ollama", "lmstudio"] = "auto"
+    model: str | None = None
+
+
+class ChatMessageRequest(BaseModel):
+    persona: Literal["reductionist", "debugger", "explainer"] = "reductionist"
+    message: str = Field(min_length=1, max_length=20_000)
+    provider: Literal["auto", "ollama", "lmstudio"] = "auto"
+    model: str | None = None
+
+
+class GlomProbeResult(BaseModel):
+    provider: Literal["ollama", "lmstudio"]
+    url: str
+    healthy: bool
+    details: str
+
+
+class MoshiServiceConfigRequest(BaseModel):
+    command: str = Field(default="", max_length=4000)
+    args: list[str] = Field(default_factory=list)
+    cwd: str | None = Field(default=None, max_length=4000)
+    http_url: str = Field(default="http://127.0.0.1:8998", max_length=4000)
+
+
+app = FastAPI(title="kyutai-mcp-web-backend", version="0.2.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+def _load_moshi_config_from_disk() -> None:
+    if not _moshi_config_path.exists():
+        return
+    try:
+        raw = _moshi_config_path.read_text(encoding="utf-8")
+        payload = __import__("json").loads(raw)
+        if not isinstance(payload, dict):
+            return
+        with _moshi_lock:
+            _moshi_config.command = str(payload.get("command", "")).strip()
+            args = payload.get("args", [])
+            _moshi_config.args = [str(a) for a in args] if isinstance(args, list) else []
+            cwd = payload.get("cwd")
+            _moshi_config.cwd = str(cwd).strip() if isinstance(cwd, str) and cwd.strip() else None
+            http_url = str(payload.get("http_url", "http://127.0.0.1:8998")).strip()
+            _moshi_config.http_url = http_url or "http://127.0.0.1:8998"
+    except Exception:
+        pass
+
+
+def _save_moshi_config_to_disk() -> None:
+    data = {
+        "command": _moshi_config.command,
+        "args": _moshi_config.args,
+        "cwd": _moshi_config.cwd,
+        "http_url": _moshi_config.http_url,
+    }
+    _moshi_config_path.write_text(__import__("json").dumps(data, indent=2), encoding="utf-8")
+
+
+_load_moshi_config_from_disk()
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+MCP_CATALOG: dict[str, Any] = {
+    "server": "kyutai-mcp",
+    "fastmcp": "3.1+",
+    "transports": {"stdio": True, "http": {"host": DEFAULT_CONFIG.mcp_http_host, "port": DEFAULT_CONFIG.mcp_http_port, "path": "/mcp"}},
+    "tools": [
+        {
+            "name": "moshi_ops",
+            "summary": "Portmanteau Kyutai Moshi operations (status, viability, references, runtime).",
+            "parameters": {
+                "operation": {
+                    "type": "string",
+                    "enum": ["status", "local_viability", "references", "recommend_runtime"],
+                    "required": True,
+                },
+                "include_env": {"type": "boolean", "default": False},
+            },
+        }
+    ],
+    "resources": [{"uri": "kyutai://about", "description": "About this MCP server"}],
+    "prompts": [{"name": "moshi/local_run_check", "description": "Checklist for local Moshi run"}],
+}
+
+
+@app.get("/api/health")
+async def health() -> dict[str, Any]:
+    return {"ok": True, "service": "kyutai-mcp-web-backend", "time_ms": int(time.time() * 1000)}
+
+
+@app.get("/api/mcp/catalog")
+async def mcp_catalog() -> dict[str, Any]:
+    return {"ok": True, "catalog": MCP_CATALOG}
+
+
+@app.get("/api/discovery/glama")
+async def discovery_glama() -> dict[str, Any]:
+    path = REPO_ROOT / "glama.json"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="glama.json not found")
+    try:
+        data = __import__("json").loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return {"ok": True, "glama": data}
+
+
+@app.get("/.well-known/mcp/manifest.json")
+async def well_known_mcp_manifest() -> dict[str, Any]:
+    glama_path = REPO_ROOT / "glama.json"
+    glama: dict[str, Any] = {}
+    if glama_path.exists():
+        try:
+            glama = __import__("json").loads(glama_path.read_text(encoding="utf-8"))
+        except Exception:
+            glama = {}
+    return {
+        "schema_version": "1.0",
+        "name": glama.get("name", "kyutai-mcp"),
+        "version": glama.get("version", "0.1.0"),
+        "description": glama.get(
+            "description",
+            "FastMCP server and web dashboard for Kyutai Moshi operations.",
+        ),
+        "repository": {"type": "git", "url": glama.get("homepage", "https://github.com/sandraschi/kyutai-mcp")},
+        "mcp": {
+            "http_url": f"http://{DEFAULT_CONFIG.mcp_http_host}:{DEFAULT_CONFIG.mcp_http_port}/mcp",
+            "transports": [
+                {"type": "stdio", "command": "uv", "args": ["run", "python", "-m", "kyutai_mcp"]},
+                {
+                    "type": "http",
+                    "url": f"http://{DEFAULT_CONFIG.mcp_http_host}:{DEFAULT_CONFIG.mcp_http_port}/mcp",
+                },
+            ],
+        },
+    }
+
+
+@app.get("/api/config")
+async def config() -> dict[str, Any]:
+    return {
+        "web_backend_port": DEFAULT_CONFIG.web_backend_port,
+        "web_frontend_port": DEFAULT_CONFIG.web_frontend_port,
+        "mcp_http": {
+            "host": DEFAULT_CONFIG.mcp_http_host,
+            "port": DEFAULT_CONFIG.mcp_http_port,
+            "path": "/mcp",
+        },
+    }
+
+
+@app.get("/api/status")
+async def status() -> dict[str, Any]:
+    return {
+        "ok": True,
+        "service": "kyutai-mcp-web-backend",
+        "runtime": {"python": platform.python_version(), "platform": platform.platform()},
+        "ports": {
+            "backend": DEFAULT_CONFIG.web_backend_port,
+            "frontend": DEFAULT_CONFIG.web_frontend_port,
+            "mcp_http": DEFAULT_CONFIG.mcp_http_port,
+        },
+        "time_ms": int(time.time() * 1000),
+    }
+
+
+async def _probe_ollama(client: httpx.AsyncClient) -> GlomProbeResult:
+    url = "http://127.0.0.1:11434/api/tags"
+    try:
+        response = await client.get(url, timeout=2.5)
+        if response.status_code == 200:
+            payload = response.json()
+            count = len(payload.get("models", [])) if isinstance(payload, dict) else 0
+            return GlomProbeResult(provider="ollama", url=url, healthy=True, details=f"HTTP 200, models={count}")
+        return GlomProbeResult(provider="ollama", url=url, healthy=False, details=f"HTTP {response.status_code}")
+    except Exception as exc:
+        return GlomProbeResult(provider="ollama", url=url, healthy=False, details=str(exc))
+
+
+async def _probe_lmstudio(client: httpx.AsyncClient) -> GlomProbeResult:
+    url = "http://127.0.0.1:1234/v1/models"
+    try:
+        response = await client.get(url, timeout=2.5)
+        if response.status_code == 200:
+            payload = response.json()
+            count = len(payload.get("data", [])) if isinstance(payload, dict) else 0
+            return GlomProbeResult(provider="lmstudio", url=url, healthy=True, details=f"HTTP 200, models={count}")
+        return GlomProbeResult(provider="lmstudio", url=url, healthy=False, details=f"HTTP {response.status_code}")
+    except Exception as exc:
+        return GlomProbeResult(provider="lmstudio", url=url, healthy=False, details=str(exc))
+
+
+@app.get("/api/glom/status")
+async def glom_status() -> dict[str, Any]:
+    async with httpx.AsyncClient() as client:
+        ollama = await _probe_ollama(client)
+        lmstudio = await _probe_lmstudio(client)
+    healthy_any = ollama.healthy or lmstudio.healthy
+    preferred = "ollama" if ollama.healthy else ("lmstudio" if lmstudio.healthy else None)
+    return {
+        "ok": True,
+        "healthy_any": healthy_any,
+        "preferred_provider": preferred,
+        "providers": [ollama.model_dump(), lmstudio.model_dump()],
+        "recommendations": (
+            ["Use provider='auto' to route to the detected provider."]
+            if healthy_any
+            else ["Start Ollama (11434) or LM Studio server (1234), then refresh."]
+        ),
+    }
+
+
+@app.get("/api/moshi/service/config")
+async def moshi_service_config_get() -> dict[str, Any]:
+    with _moshi_lock:
+        return {
+            "ok": True,
+            "config": {
+                "command": _moshi_config.command,
+                "args": _moshi_config.args,
+                "cwd": _moshi_config.cwd,
+                "http_url": _moshi_config.http_url,
+            },
+        }
+
+
+@app.post("/api/moshi/service/config")
+async def moshi_service_config_set(req: MoshiServiceConfigRequest) -> dict[str, Any]:
+    with _moshi_lock:
+        _moshi_config.command = req.command.strip()
+        _moshi_config.args = [a for a in req.args if a.strip()]
+        _moshi_config.cwd = (req.cwd.strip() if req.cwd else None)
+        _moshi_config.http_url = req.http_url.strip() or "http://127.0.0.1:8998"
+        _save_moshi_config_to_disk()
+    return {"ok": True}
+
+
+def _resolve_command(command: str) -> str:
+    if not command:
+        raise ValueError("Moshi command is not configured. Set it in Settings → Moshi Service.")
+    found = shutil.which(command)
+    if found:
+        return found
+    p = Path(command)
+    if p.exists():
+        return str(p)
+    raise ValueError(f"Command not found: {command}")
+
+
+def _ensure_logs_dir() -> Path:
+    logs_dir = Path(__file__).parent / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    return logs_dir
+
+
+@app.get("/api/moshi/service/status")
+async def moshi_service_status() -> dict[str, Any]:
+    with _moshi_lock:
+        proc = _moshi_state.proc
+        log_path = _moshi_state.log_path
+        started_at_ms = _moshi_state.started_at_ms
+        last_exit_code = _moshi_state.last_exit_code
+        http_url = _moshi_config.http_url
+
+    pid: int | None = None
+    exit_code: int | None = None
+    running = False
+    if proc is not None:
+        pid = proc.pid
+        exit_code = proc.poll()
+        running = exit_code is None
+
+    http_ok: bool | None = None
+    http_detail: str | None = None
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(http_url, timeout=1.5)
+            http_ok = resp.status_code < 500
+            http_detail = f"HTTP {resp.status_code}"
+    except Exception as exc:
+        http_ok = False
+        http_detail = str(exc)
+
+    return {
+        "ok": True,
+        "running": running,
+        "pid": pid,
+        "exit_code": exit_code if exit_code is not None else last_exit_code,
+        "started_at_ms": started_at_ms,
+        "log_path": log_path,
+        "http_probe": {"url": http_url, "ok": http_ok, "detail": http_detail},
+        "config": {
+            "command": _moshi_config.command,
+            "args": _moshi_config.args,
+            "cwd": _moshi_config.cwd,
+            "http_url": _moshi_config.http_url,
+        },
+    }
+
+
+@app.post("/api/moshi/service/start")
+async def moshi_service_start() -> dict[str, Any]:
+    with _moshi_lock:
+        if _moshi_state.proc is not None and _moshi_state.proc.poll() is None:
+            return {"ok": True, "already_running": True, "pid": _moshi_state.proc.pid}
+
+        try:
+            cmd = _resolve_command(_moshi_config.command)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        args = _moshi_config.args
+        cwd = _moshi_config.cwd
+        logs_dir = _ensure_logs_dir()
+        log_path = logs_dir / "moshi-service.log"
+        log_fh = open(log_path, "a", encoding="utf-8", errors="replace")
+        started_at_ms = int(time.time() * 1000)
+
+        proc = subprocess.Popen(
+            [cmd, *args],
+            cwd=cwd,
+            stdout=log_fh,
+            stderr=log_fh,
+            text=True,
+            bufsize=1,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
+        )
+        _moshi_state.proc = proc
+        _moshi_state.log_path = str(log_path)
+        _moshi_state.started_at_ms = started_at_ms
+        _moshi_state.last_exit_code = None
+
+        return {"ok": True, "pid": proc.pid, "log_path": str(log_path)}
+
+
+@app.post("/api/moshi/service/stop")
+async def moshi_service_stop() -> dict[str, Any]:
+    with _moshi_lock:
+        proc = _moshi_state.proc
+        _moshi_state.proc = None
+    if proc is None:
+        return {"ok": True, "stopped": False, "detail": "not running"}
+    try:
+        proc.terminate()
+        try:
+            proc.wait(timeout=3)
+        except Exception:
+            proc.kill()
+        with _moshi_lock:
+            _moshi_state.last_exit_code = proc.poll()
+        return {"ok": True, "stopped": True, "exit_code": proc.poll()}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/api/moshi/service/logs")
+async def moshi_service_logs(tail: int = 200) -> dict[str, Any]:
+    tail = max(1, min(2000, tail))
+    with _moshi_lock:
+        log_path = _moshi_state.log_path
+    if not log_path:
+        return {"ok": True, "lines": [], "log_path": None}
+    p = Path(log_path)
+    if not p.exists():
+        return {"ok": True, "lines": [], "log_path": log_path}
+    try:
+        text = p.read_text(encoding="utf-8", errors="replace")
+        return {"ok": True, "lines": text.splitlines()[-tail:], "log_path": log_path}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/api/moshi/ops")
+async def moshi_ops(req: MoshiOpsRequest) -> dict[str, Any]:
+    try:
+        result = await moshi_ops_impl(operation=req.operation, include_env=req.include_env)
+        return {"ok": True, "result": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+async def _select_provider(requested: str) -> str:
+    if requested != "auto":
+        return requested
+    probe = await glom_status()
+    preferred = probe.get("preferred_provider")
+    if not preferred:
+        raise HTTPException(
+            status_code=503,
+            detail="No local LLM provider detected. Start Ollama (11434) or LM Studio server (1234).",
+        )
+    return str(preferred)
+
+
+async def _ollama_list_models(client: httpx.AsyncClient) -> list[str]:
+    resp = await client.get("http://127.0.0.1:11434/api/tags", timeout=3.0)
+    resp.raise_for_status()
+    payload = resp.json()
+    if not isinstance(payload, dict):
+        return []
+    models = payload.get("models", [])
+    if not isinstance(models, list):
+        return []
+    out: list[str] = []
+    for m in models:
+        if isinstance(m, dict) and isinstance(m.get("name"), str):
+            out.append(m["name"])
+    return out
+
+
+async def _lmstudio_list_models(client: httpx.AsyncClient) -> list[str]:
+    resp = await client.get("http://127.0.0.1:1234/v1/models", timeout=3.0)
+    resp.raise_for_status()
+    payload = resp.json()
+    if not isinstance(payload, dict):
+        return []
+    data = payload.get("data", [])
+    if not isinstance(data, list):
+        return []
+    out: list[str] = []
+    for item in data:
+        if isinstance(item, dict) and isinstance(item.get("id"), str):
+            out.append(item["id"])
+    return out
+
+
+async def _select_model(provider: str, requested: str | None) -> str:
+    if requested and requested.strip():
+        return requested.strip()
+    async with httpx.AsyncClient() as client:
+        models = await _ollama_list_models(client) if provider == "ollama" else await _lmstudio_list_models(client)
+    if not models:
+        raise HTTPException(
+            status_code=503,
+            detail=f"No models available for provider '{provider}'. Load a model, or specify a model explicitly.",
+        )
+    return models[0]
+
+
+async def _call_ollama_chat(model: str, messages: list[dict[str, str]]) -> str:
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            "http://127.0.0.1:11434/api/chat",
+            json={"model": model, "messages": messages, "stream": False},
+            timeout=60.0,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+        if isinstance(payload, dict):
+            msg = payload.get("message")
+            if isinstance(msg, dict) and isinstance(msg.get("content"), str):
+                return msg["content"]
+    raise HTTPException(status_code=502, detail="Unexpected Ollama response format.")
+
+
+async def _call_lmstudio_chat(model: str, messages: list[dict[str, str]]) -> str:
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            "http://127.0.0.1:1234/v1/chat/completions",
+            json={"model": model, "messages": messages, "temperature": 0.3},
+            timeout=60.0,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+        if isinstance(payload, dict):
+            choices = payload.get("choices")
+            if isinstance(choices, list) and choices:
+                c0 = choices[0]
+                if isinstance(c0, dict):
+                    msg = c0.get("message")
+                    if isinstance(msg, dict) and isinstance(msg.get("content"), str):
+                        return msg["content"]
+    raise HTTPException(status_code=502, detail="Unexpected LM Studio response format.")
+
+
+@app.post("/api/chat/refine")
+async def chat_refine(req: ChatRefineRequest) -> dict[str, Any]:
+    provider = await _select_provider(req.provider)
+    model = await _select_model(provider, req.model)
+    system = (
+        "Refine the user's prompt.\n"
+        "Make it unambiguous, actionable, and concise.\n"
+        "Return ONLY the refined prompt as plain text.\n"
+    )
+    user = f"Persona: {req.persona}\nPrompt:\n{req.prompt.strip()}"
+    messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+    refined = await _call_ollama_chat(model, messages) if provider == "ollama" else await _call_lmstudio_chat(model, messages)
+    refined = refined.replace("\r\n", "\n").strip()
+    if not refined:
+        raise HTTPException(status_code=502, detail="Refinement returned empty text.")
+    return {"ok": True, "provider": provider, "model": model, "refined_prompt": refined}
+
+
+@app.post("/api/chat/message")
+async def chat_message(req: ChatMessageRequest) -> dict[str, Any]:
+    provider = await _select_provider(req.provider)
+    model = await _select_model(provider, req.model)
+    system = (
+        "You are the assistant for kyutai-mcp.\n"
+        "Be direct and practical.\n"
+        "When the user asks about Moshi talk/listen, tell them to configure and start the Moshi Service.\n"
+    )
+    user = f"Persona: {req.persona}\nUser message: {req.message.strip()}"
+    messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+    text = await _call_ollama_chat(model, messages) if provider == "ollama" else await _call_lmstudio_chat(model, messages)
+    text = text.replace("\r\n", "\n").strip()
+    if not text:
+        raise HTTPException(status_code=502, detail="Chat returned empty text.")
+    return {"ok": True, "provider": provider, "model": model, "response": text}
+

@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kyutai-mcp"
+version = "0.1.0"
+description = "FastMCP 3.1 server + SOTA webapp for Kyutai Moshi research and ops"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "fastmcp>=3.1.0",
+  "pydantic>=2.8.0",
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+  "httpx>=0.27.0",
+  "nvidia-ml-py>=12.560.30; platform_system == 'Windows' or platform_system == 'Linux'",
+]
+
+[project.scripts]
+kyutai-mcp = "kyutai_mcp.__main__:main"
+
+[tool.uv]
+dev-dependencies = [
+  "pytest>=8.2.0",
+  "ruff>=0.6.0",
+  "ty>=0.0.1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kyutai_mcp"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.format]
+quote-style = "double"
+

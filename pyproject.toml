@@ -31,9 +31,6 @@ dev = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/kyutai_mcp"]
 
-tool.ruff.format]
-quote-style = "double"
-
 [tool.ruff]
 line-length = 120
 target-version = "py312"

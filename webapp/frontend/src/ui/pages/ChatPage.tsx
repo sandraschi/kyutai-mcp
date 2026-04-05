@@ -1,7 +1,12 @@
-import { useMemo, useState } from "react";
-
-type Persona = "reductionist" | "debugger" | "explainer";
-type Provider = "auto" | "ollama" | "lmstudio";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  type LlmProvider,
+  type Persona,
+  fetchDashboardSettings,
+  fetchLlmModels,
+  patchDashboardSettings,
+} from "../../lib/dashboardSettings";
+import { ModelSelect } from "../components/ModelSelect";
 
 type ChatItem = {
   role: "user" | "assistant";
@@ -11,11 +16,58 @@ type ChatItem = {
 
 export function ChatPage() {
   const [persona, setPersona] = useState<Persona>("reductionist");
-  const [provider, setProvider] = useState<Provider>("auto");
-  const [model, setModel] = useState("");
+  const [provider, setProvider] = useState<LlmProvider>("auto");
+  const [model, setModel] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [items, setItems] = useState<ChatItem[]>([]);
   const [busy, setBusy] = useState(false);
+  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
+  const [lmstudioModels, setLmstudioModels] = useState<string[]>([]);
+  const settingsLoaded = useRef(false);
+
+  const modelsFor = useMemo(
+    () => (provider === "lmstudio" ? lmstudioModels : ollamaModels),
+    [provider, ollamaModels, lmstudioModels],
+  );
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const s = await fetchDashboardSettings();
+        setPersona(s.chat_persona);
+        setProvider(s.chat_provider);
+        setModel(s.chat_model);
+      } catch {
+        // keep defaults
+      } finally {
+        settingsLoaded.current = true;
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    void (async () => {
+      const [o, l] = await Promise.all([
+        fetchLlmModels("ollama").catch(() => [] as string[]),
+        fetchLlmModels("lmstudio").catch(() => [] as string[]),
+      ]);
+      setOllamaModels(o);
+      setLmstudioModels(l);
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!settingsLoaded.current) return;
+    const t = window.setTimeout(() => {
+      void patchDashboardSettings({
+        chat_persona: persona,
+        chat_provider: provider,
+        chat_model: model,
+      }).catch(() => {});
+    }, 500);
+    return () => window.clearTimeout(t);
+  }, [persona, provider, model]);
+
   const canSend = useMemo(() => message.trim().length > 0 && !busy, [message, busy]);
 
   const send = async () => {
@@ -31,31 +83,39 @@ export function ChatPage() {
         body: JSON.stringify({
           persona,
           provider,
-          model: model.trim() || null,
-          message: user
-        })
+          model,
+          message: user,
+        }),
       });
       const payload = (await response.json()) as {
-        ok: boolean;
-        provider: string;
-        model: string;
-        response: string;
+        ok?: boolean;
+        provider?: string;
+        model?: string;
+        response?: string;
         detail?: string;
       };
-      if (!payload.ok) throw new Error(payload.detail ?? "Chat request failed");
+      if (!response.ok) {
+        throw new Error(typeof payload.detail === "string" ? payload.detail : "Chat request failed");
+      }
+      if (!payload.ok || typeof payload.response !== "string") {
+        throw new Error(typeof payload.detail === "string" ? payload.detail : "Chat request failed");
+      }
+      const answer = payload.response;
+      const usedProvider = payload.provider ?? "";
+      const usedModel = payload.model ?? "";
       setItems((xs) =>
         xs.concat({
           role: "assistant",
-          text: payload.response,
-          meta: `provider=${payload.provider}, model=${payload.model}`
-        })
+          text: answer,
+          meta: `provider=${usedProvider}, model=${usedModel}`,
+        }),
       );
     } catch (exc) {
       setItems((xs) =>
         xs.concat({
           role: "assistant",
-          text: `Request failed: ${String(exc)}`
-        })
+          text: `Request failed: ${String(exc)}`,
+        }),
       );
     } finally {
       setBusy(false);
@@ -67,7 +127,8 @@ export function ChatPage() {
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
         <h2 className="text-xl font-semibold">Chat Console</h2>
         <p className="mt-1 text-sm text-slate-400">
-          Real chat via Ollama or LM Studio. Use provider Auto to route to whatever is detected.
+          Real chat via Ollama or LM Studio. Provider Auto uses Glom discovery. Defaults sync to Settings (saved on the
+          backend).
         </p>
       </section>
 
@@ -92,22 +153,20 @@ export function ChatPage() {
               <select
                 className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm"
                 value={provider}
-                onChange={(e) => setProvider(e.target.value as Provider)}
+                onChange={(e) => setProvider(e.target.value as LlmProvider)}
               >
                 <option value="auto">Auto (Glom-On)</option>
                 <option value="ollama">Ollama</option>
                 <option value="lmstudio">LM Studio</option>
               </select>
             </label>
-            <label className="block text-xs text-slate-500">
-              Model (optional)
-              <input
-                className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm"
-                placeholder="e.g. llama3.1:8b"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-              />
-            </label>
+            <ModelSelect
+              label="Model"
+              provider={provider}
+              value={model}
+              models={modelsFor}
+              onChange={setModel}
+            />
           </div>
         </div>
 
@@ -149,4 +208,3 @@ export function ChatPage() {
     </div>
   );
 }
-

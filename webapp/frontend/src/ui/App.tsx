@@ -9,6 +9,7 @@ import { StatusPage } from "./pages/StatusPage";
 import { ChatPage } from "./pages/ChatPage";
 import { AppsPage } from "./pages/AppsPage";
 import { MoshiTalkPage } from "./pages/MoshiTalkPage";
+import { VoicePipelinePage } from "./pages/VoicePipelinePage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { LoggerPage } from "./pages/LoggerPage";
 
@@ -22,6 +23,7 @@ export function App() {
         <Route path="/apps" element={<AppsPage />} />
         <Route path="/moshi" element={<MoshiTalkPage />} />
         <Route path="/talk" element={<MoshiTalkPage />} />
+        <Route path="/voice" element={<VoicePipelinePage />} />
         <Route path="/status" element={<StatusPage />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/logs" element={<LoggerPage />} />

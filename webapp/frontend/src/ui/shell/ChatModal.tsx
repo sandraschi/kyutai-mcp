@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
-
-type Persona = "reductionist" | "debugger" | "explainer";
+import type { LlmProvider, Persona } from "../../lib/dashboardSettings";
+import { fetchDashboardSettings } from "../../lib/dashboardSettings";
 
 export function ChatModal(props: {
   open: boolean;
@@ -9,23 +9,55 @@ export function ChatModal(props: {
   onLog: (entry: { ts: number; level: "DEBUG" | "INFO" | "SOTA-WARN" | "ERROR"; message: string }) => void;
 }) {
   const [persona, setPersona] = useState<Persona>("reductionist");
+  const [refineProvider, setRefineProvider] = useState<LlmProvider>("auto");
+  const [refineModel, setRefineModel] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const [refined, setRefined] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!props.open) return;
+    void (async () => {
+      try {
+        const s = await fetchDashboardSettings();
+        setPersona(s.chat_persona);
+        setRefineProvider(s.refine_provider);
+        setRefineModel(s.refine_model);
+      } catch {
+        // keep local defaults
+      }
+    })();
+  }, [props.open]);
 
   const canRefine = useMemo(() => prompt.trim().length > 0 && !busy, [prompt, busy]);
 
   const refine = async () => {
     setBusy(true);
-    props.onLog({ ts: Date.now(), level: "INFO", message: "Refining prompt (provider=auto)" });
+    props.onLog({
+      ts: Date.now(),
+      level: "INFO",
+      message: `Refining prompt (provider=${refineProvider}, model=${refineModel ?? "default"})`,
+    });
     try {
       const res = await fetch("/api/chat/refine", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ persona, prompt, provider: "auto" })
+        body: JSON.stringify({
+          persona,
+          prompt,
+          provider: refineProvider,
+          model: refineModel,
+        }),
       });
-      const data = (await res.json()) as { ok: boolean; refined_prompt?: string };
-      if (!data.ok || !data.refined_prompt) throw new Error("Refine failed");
+      const data = (await res.json()) as {
+        ok?: boolean;
+        refined_prompt?: string;
+        detail?: string;
+      };
+      if (!res.ok) {
+        throw new Error(typeof data.detail === "string" ? data.detail : "Refine failed");
+      }
+      if (!data.ok || !data.refined_prompt) throw new Error(data.detail ?? "Refine failed");
       setRefined(data.refined_prompt);
       props.onLog({ ts: Date.now(), level: "DEBUG", message: "Refined prompt ready" });
     } catch (e) {
@@ -64,6 +96,17 @@ export function ChatModal(props: {
               <option value="debugger">Debugger</option>
               <option value="explainer">Explainer</option>
             </select>
+
+            <div className="pt-1 text-xs text-slate-500">
+              Refine routing: <span className="font-mono text-slate-400">{refineProvider}</span>
+              {refineModel ? (
+                <>
+                  {" "}
+                  / <span className="font-mono text-slate-400">{refineModel}</span>
+                </>
+              ) : null}{" "}
+              (from Settings → saved defaults)
+            </div>
 
             <div className="pt-2 text-xs text-slate-400">Prompt</div>
             <textarea
@@ -105,7 +148,7 @@ export function ChatModal(props: {
               )}
             </div>
             <div className="text-xs text-slate-500">
-              Tip: press Ctrl+K (or Cmd+K) to open this panel.
+              Tip: press Ctrl+K (or Cmd+K) to open this panel. Change refine provider/model under Settings.
             </div>
           </div>
         </div>
@@ -113,4 +156,3 @@ export function ChatModal(props: {
     </div>
   );
 }
-

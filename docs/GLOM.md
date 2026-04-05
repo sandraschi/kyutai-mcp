@@ -26,6 +26,7 @@ Chat and refine requests accept `provider`: `auto` | `ollama` | `lmstudio`.
 - **Status** page shows provider rows and recommendations.
 - **Chat** page sends messages to the backend, which forwards to the OpenAI-compatible chat API of the selected stack.
 - **Chat modal (Ctrl+K)** uses **Refine** with `provider: auto` by default.
+- **Voice orchestration** endpoints (`/api/voice/turn`, `/api/voice/speak_boilerplate`) use the same provider routing and model selection strategy.
 
 ## Operational tips
 

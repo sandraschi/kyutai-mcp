@@ -1,19 +1,22 @@
 from __future__ import annotations
 
+import json
 import os
 import platform
 import shutil
 import subprocess
 import threading
 import time
+import urllib.parse
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from kyutai_mcp.config import DEFAULT_CONFIG
 from kyutai_mcp.server import moshi_ops_impl
@@ -44,6 +47,20 @@ _moshi_config = MoshiServiceConfig(
 _moshi_state = MoshiServiceState(proc=None, log_path=None, started_at_ms=None, last_exit_code=None)
 _moshi_lock = threading.Lock()
 _moshi_config_path = Path(__file__).parent / "moshi-service-config.json"
+_dashboard_settings_path = Path(__file__).parent / "dashboard-settings.json"
+_settings_lock = threading.Lock()
+_DEFAULT_DASHBOARD_SETTINGS: dict[str, Any] = {
+    "chat_persona": "reductionist",
+    "chat_provider": "auto",
+    "chat_model": None,
+    "voice_provider": "auto",
+    "voice_model": None,
+    "refine_provider": "auto",
+    "refine_model": None,
+}
+_dashboard_settings: dict[str, Any] = dict(_DEFAULT_DASHBOARD_SETTINGS)
+_voice_session_lock = threading.Lock()
+_voice_sessions: dict[str, dict[str, Any]] = {}
 
 
 class MoshiOpsRequest(BaseModel):
@@ -65,6 +82,26 @@ class ChatMessageRequest(BaseModel):
     model: str | None = None
 
 
+class VoiceTurnRequest(BaseModel):
+    session_id: str = Field(default="default", min_length=1, max_length=128)
+    utterance: str = Field(min_length=1, max_length=20_000)
+    provider: Literal["auto", "ollama", "lmstudio"] = "auto"
+    model: str | None = None
+    use_deep_reasoner: bool = True
+    deep_provider: Literal["same", "ollama", "lmstudio"] = "same"
+    deep_model: str | None = None
+    location_hint: str | None = None
+
+
+class SpeakBoilerplateRequest(BaseModel):
+    topic: Literal["weather", "world_news", "stock_market", "ai_news"]
+    location: str = Field(default="Vienna", max_length=200)
+    symbols: list[str] = Field(default_factory=lambda: ["^GSPC", "^IXIC", "^DJI"])
+    provider: Literal["auto", "ollama", "lmstudio"] = "auto"
+    model: str | None = None
+    style: Literal["brief", "normal", "detailed"] = "normal"
+
+
 class GlomProbeResult(BaseModel):
     provider: Literal["ollama", "lmstudio"]
     url: str
@@ -77,6 +114,25 @@ class MoshiServiceConfigRequest(BaseModel):
     args: list[str] = Field(default_factory=list)
     cwd: str | None = Field(default=None, max_length=4000)
     http_url: str = Field(default="http://127.0.0.1:8998", max_length=4000)
+
+
+class DashboardSettingsBody(BaseModel):
+    chat_persona: Literal["reductionist", "debugger", "explainer"] = "reductionist"
+    chat_provider: Literal["auto", "ollama", "lmstudio"] = "auto"
+    chat_model: str | None = None
+    voice_provider: Literal["auto", "ollama", "lmstudio"] = "auto"
+    voice_model: str | None = None
+    refine_provider: Literal["auto", "ollama", "lmstudio"] = "auto"
+    refine_model: str | None = None
+
+    @field_validator("chat_model", "voice_model", "refine_model", mode="before")
+    @classmethod
+    def _empty_model_to_none(cls, v: object) -> str | None:
+        if v is None:
+            return None
+        if isinstance(v, str) and not v.strip():
+            return None
+        return str(v)
 
 
 app = FastAPI(title="kyutai-mcp-web-backend", version="0.2.0")
@@ -122,7 +178,57 @@ def _save_moshi_config_to_disk() -> None:
 
 _load_moshi_config_from_disk()
 
+
+def _load_dashboard_settings_from_disk() -> None:
+    global _dashboard_settings
+    if not _dashboard_settings_path.exists():
+        return
+    try:
+        payload = json.loads(_dashboard_settings_path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            return
+        merged = dict(_DEFAULT_DASHBOARD_SETTINGS)
+        for key in _DEFAULT_DASHBOARD_SETTINGS:
+            if key in payload:
+                merged[key] = payload[key]
+        for mk in ("chat_model", "voice_model", "refine_model"):
+            v = merged.get(mk)
+            if isinstance(v, str) and not v.strip():
+                merged[mk] = None
+        _dashboard_settings = merged
+    except Exception:
+        pass
+
+
+def _save_dashboard_settings_to_disk() -> None:
+    _dashboard_settings_path.write_text(
+        json.dumps(_dashboard_settings, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
+_load_dashboard_settings_from_disk()
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _ollama_base_url() -> str:
+    """HTTP base URL for the Ollama API (no path, no trailing slash).
+
+    Reads ``OLLAMA_HOST`` like the Ollama app/CLI (``host:port`` or ``http://host:port``).
+    Use this when Ollama uses a custom port, LAN IP, or WSL. If the env is set to a bind
+    address ``0.0.0.0``, it is normalized to ``127.0.0.1`` for client connections.
+    """
+    raw = (os.environ.get("OLLAMA_HOST") or "127.0.0.1:11434").strip() or "127.0.0.1:11434"
+    if "://" not in raw:
+        raw = "http://" + raw
+    parsed = urllib.parse.urlparse(raw)
+    host = parsed.hostname or "127.0.0.1"
+    if host == "0.0.0.0":
+        host = "127.0.0.1"
+    port = parsed.port if parsed.port is not None else 11434
+    scheme = parsed.scheme if parsed.scheme else "http"
+    return f"{scheme}://{host}:{port}"
 
 MCP_CATALOG: dict[str, Any] = {
     "server": "kyutai-mcp",
@@ -140,10 +246,31 @@ MCP_CATALOG: dict[str, Any] = {
                 },
                 "include_env": {"type": "boolean", "default": False},
             },
-        }
+        },
+        {
+            "name": "voice_pipeline",
+            "summary": "Voice pipeline operations: turns, briefings, Moshi service control, session history.",
+            "parameters": {
+                "operation": {
+                    "type": "string",
+                    "enum": ["turn", "speak_boilerplate", "service_status", "service_start", "service_stop", "session_history"],
+                    "required": True,
+                },
+                "utterance": {"type": "string", "default": ""},
+                "session_id": {"type": "string", "default": "default"},
+                "provider": {"type": "string", "enum": ["auto", "ollama", "lmstudio"], "default": "auto"},
+                "model": {"type": "string", "required": False},
+                "use_deep_reasoner": {"type": "boolean", "default": True},
+                "topic": {"type": "string", "enum": ["weather", "world_news", "ai_news", "stock_market"], "default": "weather"},
+                "style": {"type": "string", "enum": ["brief", "normal", "detailed"], "default": "normal"},
+            },
+        },
     ],
     "resources": [{"uri": "kyutai://about", "description": "About this MCP server"}],
-    "prompts": [{"name": "moshi/local_run_check", "description": "Checklist for local Moshi run"}],
+    "prompts": [
+        {"name": "moshi/local_run_check", "description": "Checklist for local Moshi run"},
+        {"name": "voice/pipeline_guide", "description": "Voice pipeline orchestration guide for agents"},
+    ],
 }
 
 
@@ -210,6 +337,7 @@ async def config() -> dict[str, Any]:
             "port": DEFAULT_CONFIG.mcp_http_port,
             "path": "/mcp",
         },
+        "ollama": {"base_url": _ollama_base_url()},
     }
 
 
@@ -229,7 +357,7 @@ async def status() -> dict[str, Any]:
 
 
 async def _probe_ollama(client: httpx.AsyncClient) -> GlomProbeResult:
-    url = "http://127.0.0.1:11434/api/tags"
+    url = f"{_ollama_base_url()}/api/tags"
     try:
         response = await client.get(url, timeout=2.5)
         if response.status_code == 200:
@@ -380,9 +508,13 @@ async def moshi_service_start() -> dict[str, Any]:
         log_fh = open(log_path, "a", encoding="utf-8", errors="replace")
         started_at_ms = int(time.time() * 1000)
 
+        env = os.environ.copy()
+        env["NO_TORCH_COMPILE"] = "1"
+
         proc = subprocess.Popen(
             [cmd, *args],
             cwd=cwd,
+            env=env,
             stdout=log_fh,
             stderr=log_fh,
             text=True,
@@ -457,7 +589,14 @@ async def _select_provider(requested: str) -> str:
 
 
 async def _ollama_list_models(client: httpx.AsyncClient) -> list[str]:
-    resp = await client.get("http://127.0.0.1:11434/api/tags", timeout=3.0)
+    base = _ollama_base_url()
+    try:
+        resp = await client.get(f"{base}/api/tags", timeout=3.0)
+    except httpx.ConnectError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Cannot reach Ollama at {base} (OLLAMA_HOST). Start Ollama and try again.",
+        ) from e
     resp.raise_for_status()
     payload = resp.json()
     if not isinstance(payload, dict):
@@ -473,7 +612,13 @@ async def _ollama_list_models(client: httpx.AsyncClient) -> list[str]:
 
 
 async def _lmstudio_list_models(client: httpx.AsyncClient) -> list[str]:
-    resp = await client.get("http://127.0.0.1:1234/v1/models", timeout=3.0)
+    try:
+        resp = await client.get("http://127.0.0.1:1234/v1/models", timeout=3.0)
+    except httpx.ConnectError as e:
+        raise HTTPException(
+            status_code=503,
+            detail="Cannot reach LM Studio at http://127.0.0.1:1234. Start the local server and try again.",
+        ) from e
     resp.raise_for_status()
     payload = resp.json()
     if not isinstance(payload, dict):
@@ -502,39 +647,257 @@ async def _select_model(provider: str, requested: str | None) -> str:
 
 
 async def _call_ollama_chat(model: str, messages: list[dict[str, str]]) -> str:
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            "http://127.0.0.1:11434/api/chat",
-            json={"model": model, "messages": messages, "stream": False},
-            timeout=60.0,
-        )
-        resp.raise_for_status()
-        payload = resp.json()
-        if isinstance(payload, dict):
-            msg = payload.get("message")
-            if isinstance(msg, dict) and isinstance(msg.get("content"), str):
-                return msg["content"]
+    base = _ollama_base_url()
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{base}/api/chat",
+                json={"model": model, "messages": messages, "stream": False},
+                timeout=60.0,
+            )
+            resp.raise_for_status()
+            payload = resp.json()
+            if isinstance(payload, dict):
+                msg = payload.get("message")
+                if isinstance(msg, dict) and isinstance(msg.get("content"), str):
+                    return msg["content"]
+    except httpx.ConnectError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Cannot reach Ollama at {base} (OLLAMA_HOST). Start Ollama and try again.",
+        ) from e
     raise HTTPException(status_code=502, detail="Unexpected Ollama response format.")
 
 
 async def _call_lmstudio_chat(model: str, messages: list[dict[str, str]]) -> str:
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                "http://127.0.0.1:1234/v1/chat/completions",
+                json={"model": model, "messages": messages, "temperature": 0.3},
+                timeout=60.0,
+            )
+            resp.raise_for_status()
+            payload = resp.json()
+            if isinstance(payload, dict):
+                choices = payload.get("choices")
+                if isinstance(choices, list) and choices:
+                    c0 = choices[0]
+                    if isinstance(c0, dict):
+                        msg = c0.get("message")
+                        if isinstance(msg, dict) and isinstance(msg.get("content"), str):
+                            return msg["content"]
+    except httpx.ConnectError as e:
+        raise HTTPException(
+            status_code=503,
+            detail="Cannot reach LM Studio at http://127.0.0.1:1234. Start the local server and try again.",
+        ) from e
+    raise HTTPException(status_code=502, detail="Unexpected LM Studio response format.")
+
+
+async def _call_provider_chat(provider: str, model: str, messages: list[dict[str, str]]) -> str:
+    if provider == "ollama":
+        return await _call_ollama_chat(model, messages)
+    return await _call_lmstudio_chat(model, messages)
+
+
+@app.get("/api/llm/models")
+async def api_llm_models(
+    provider: Literal["ollama", "lmstudio"] = Query("ollama"),
+) -> dict[str, Any]:
+    """List model IDs from the local Ollama or LM Studio HTTP API."""
     async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            "http://127.0.0.1:1234/v1/chat/completions",
-            json={"model": model, "messages": messages, "temperature": 0.3},
-            timeout=60.0,
+        models = (
+            await _ollama_list_models(client) if provider == "ollama" else await _lmstudio_list_models(client)
         )
+    return {"ok": True, "provider": provider, "models": models}
+
+
+@app.get("/api/dashboard/settings")
+async def dashboard_settings_get() -> dict[str, Any]:
+    with _settings_lock:
+        return {"ok": True, "settings": dict(_dashboard_settings)}
+
+
+@app.post("/api/dashboard/settings")
+async def dashboard_settings_set(body: DashboardSettingsBody) -> dict[str, Any]:
+    with _settings_lock:
+        global _dashboard_settings
+        _dashboard_settings = body.model_dump()
+        _save_dashboard_settings_to_disk()
+    return {"ok": True, "settings": dict(_dashboard_settings)}
+
+
+def _infer_intent(utterance: str) -> str:
+    text = utterance.lower()
+    if "weather" in text:
+        return "weather"
+    if "ai news" in text or "artificial intelligence news" in text:
+        return "ai_news"
+    if "world news" in text or "headline" in text or "news" in text:
+        return "world_news"
+    if "stock" in text or "market" in text or "nasdaq" in text or "s&p" in text:
+        return "stock_market"
+    return "general"
+
+
+def _extract_location(utterance: str) -> str | None:
+    text = utterance.strip()
+    low = text.lower()
+    for marker in (" in ", " for ", " at "):
+        idx = low.rfind(marker)
+        if idx >= 0:
+            loc = text[idx + len(marker):].strip(" ?!.,")
+            if loc:
+                return loc
+    return None
+
+
+async def _fetch_weather(location: str) -> dict[str, Any]:
+    geo_url = "https://geocoding-api.open-meteo.com/v1/search"
+    async with httpx.AsyncClient() as client:
+        geo = await client.get(geo_url, params={"name": location, "count": 1, "language": "en", "format": "json"}, timeout=8.0)
+        geo.raise_for_status()
+        payload = geo.json()
+        results = payload.get("results", []) if isinstance(payload, dict) else []
+        if not results:
+            raise HTTPException(status_code=404, detail=f"No location match for '{location}'.")
+        item = results[0]
+        lat = item.get("latitude")
+        lon = item.get("longitude")
+        if lat is None or lon is None:
+            raise HTTPException(status_code=502, detail="Weather geocoding returned no coordinates.")
+        forecast = await client.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude": lat,
+                "longitude": lon,
+                "current": "temperature_2m,apparent_temperature,weather_code,wind_speed_10m",
+                "daily": "temperature_2m_max,temperature_2m_min",
+                "timezone": "auto",
+            },
+            timeout=8.0,
+        )
+        forecast.raise_for_status()
+        data = forecast.json()
+    return {"location": item, "forecast": data}
+
+
+async def _fetch_rss_headlines(url: str, max_items: int = 6) -> list[dict[str, str]]:
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(url, timeout=8.0, follow_redirects=True)
+        resp.raise_for_status()
+    root = ET.fromstring(resp.text)
+    out: list[dict[str, str]] = []
+    for item in root.findall(".//item"):
+        title = (item.findtext("title") or "").strip()
+        link = (item.findtext("link") or "").strip()
+        if title:
+            out.append({"title": title, "url": link})
+        if len(out) >= max_items:
+            break
+    return out
+
+
+async def _fetch_stock_snapshot(symbols: list[str]) -> list[dict[str, Any]]:
+    normalized = [s.strip().upper() for s in symbols if s.strip()]
+    if not normalized:
+        normalized = ["^GSPC", "^IXIC", "^DJI"]
+    encoded = urllib.parse.quote(",".join(normalized), safe=",")
+    url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={encoded}"
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(url, timeout=8.0)
         resp.raise_for_status()
         payload = resp.json()
-        if isinstance(payload, dict):
-            choices = payload.get("choices")
-            if isinstance(choices, list) and choices:
-                c0 = choices[0]
-                if isinstance(c0, dict):
-                    msg = c0.get("message")
-                    if isinstance(msg, dict) and isinstance(msg.get("content"), str):
-                        return msg["content"]
-    raise HTTPException(status_code=502, detail="Unexpected LM Studio response format.")
+    result = payload.get("quoteResponse", {}).get("result", []) if isinstance(payload, dict) else []
+    out: list[dict[str, Any]] = []
+    for item in result:
+        if not isinstance(item, dict):
+            continue
+        out.append(
+            {
+                "symbol": item.get("symbol"),
+                "name": item.get("shortName") or item.get("longName"),
+                "price": item.get("regularMarketPrice"),
+                "change": item.get("regularMarketChange"),
+                "change_percent": item.get("regularMarketChangePercent"),
+                "currency": item.get("currency"),
+            }
+        )
+    return out
+
+
+def _workflow_prompts() -> dict[str, Any]:
+    return {
+        "voice_ack_prompt": (
+            "You produce the immediate spoken acknowledgment in <= 18 words. "
+            "Tone: calm operator assistant. No markdown. No long explanations."
+        ),
+        "voice_reasoner_prompt": (
+            "You are the deep reasoner for a voice assistant. "
+            "Use provided tool outputs only. Return concise, spoken-friendly text (2-5 sentences). "
+            "If uncertainty exists, state it plainly."
+        ),
+        "speak_boilerplate_prompt": (
+            "Convert tool data into a polished spoken briefing. Keep factual, current, and concise. "
+            "Output plain text suitable for TTS."
+        ),
+    }
+
+
+async def _agentic_speak_boilerplate(
+    topic: str,
+    provider: str,
+    model: str,
+    location: str,
+    symbols: list[str],
+    style: str,
+) -> dict[str, Any]:
+    sources: list[dict[str, Any]] = []
+    gathered: dict[str, Any] = {}
+    if topic == "weather":
+        gathered = await _fetch_weather(location)
+        sources.append({"name": "Open-Meteo", "url": "https://api.open-meteo.com/v1/forecast"})
+    elif topic == "world_news":
+        headlines = await _fetch_rss_headlines("https://feeds.bbci.co.uk/news/world/rss.xml", max_items=7)
+        gathered = {"headlines": headlines}
+        sources.append({"name": "BBC World RSS", "url": "https://feeds.bbci.co.uk/news/world/rss.xml"})
+    elif topic == "ai_news":
+        headlines = await _fetch_rss_headlines("https://www.artificialintelligence-news.com/feed/", max_items=7)
+        gathered = {"headlines": headlines}
+        sources.append({"name": "AI News RSS", "url": "https://www.artificialintelligence-news.com/feed/"})
+    elif topic == "stock_market":
+        snapshot = await _fetch_stock_snapshot(symbols)
+        gathered = {"quotes": snapshot}
+        sources.append({"name": "Yahoo Finance quote API", "url": "https://query1.finance.yahoo.com/v7/finance/quote"})
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported topic: {topic}")
+
+    prompts = _workflow_prompts()
+    system = (
+        prompts["speak_boilerplate_prompt"]
+        + f"\nStyle: {style}\n"
+        + "End with one short line: 'Next update available on request.'"
+    )
+    user = (
+        f"Topic: {topic}\n"
+        f"Location: {location}\n"
+        f"Raw data JSON:\n{__import__('json').dumps(gathered, ensure_ascii=False)}\n"
+        f"Sources JSON:\n{__import__('json').dumps(sources, ensure_ascii=False)}\n"
+    )
+    text = await _call_provider_chat(provider, model, [{"role": "system", "content": system}, {"role": "user", "content": user}])
+    return {
+        "topic": topic,
+        "style": style,
+        "spoken_text": text.strip(),
+        "research_data": gathered,
+        "sources": sources,
+        "workflow": [
+            "collect_live_sources",
+            "normalize_topic_data",
+            "llm_synthesize_spoken_briefing",
+        ],
+    }
 
 
 @app.post("/api/chat/refine")
@@ -571,4 +934,189 @@ async def chat_message(req: ChatMessageRequest) -> dict[str, Any]:
     if not text:
         raise HTTPException(status_code=502, detail="Chat returned empty text.")
     return {"ok": True, "provider": provider, "model": model, "response": text}
+
+
+@app.get("/api/voice/workflows")
+async def voice_workflows() -> dict[str, Any]:
+    return {
+        "ok": True,
+        "prompts": _workflow_prompts(),
+        "skills": {
+            "staged_voice_response": [
+                "quick_ack",
+                "intent_resolution",
+                "tool_research_if_needed",
+                "deep_reasoner_final_answer",
+                "tts_ready_output",
+            ],
+            "agentic_speak_boilerplate": [
+                "topic_select",
+                "source_fetch",
+                "llm_synthesis",
+            ],
+        },
+        "examples": [
+            {
+                "utterance": "hi moshi weather report please for vienna",
+                "result": "intent=weather, quick_ack + weather research + spoken report",
+            },
+            {
+                "utterance": "hi moshi world news update",
+                "result": "intent=world_news, RSS research + spoken bulletin",
+            },
+        ],
+    }
+
+
+@app.post("/api/voice/speak_boilerplate")
+async def speak_boilerplate(req: SpeakBoilerplateRequest) -> dict[str, Any]:
+    provider = await _select_provider(req.provider)
+    model = await _select_model(provider, req.model)
+    result = await _agentic_speak_boilerplate(
+        topic=req.topic,
+        provider=provider,
+        model=model,
+        location=req.location,
+        symbols=req.symbols,
+        style=req.style,
+    )
+    return {"ok": True, "provider": provider, "model": model, **result}
+
+
+@app.get("/api/voice/sessions")
+async def voice_sessions_list() -> dict[str, Any]:
+    """List all voice sessions with turn counts and last activity."""
+    with _voice_session_lock:
+        summary = []
+        for sid, data in _voice_sessions.items():
+            turns = data.get("_turns", [])
+            summary.append({
+                "session_id": sid,
+                "turn_count": len(turns),
+                "last_activity_ms": turns[-1].get("timestamp_ms") if turns else None,
+            })
+    return {"ok": True, "sessions": summary, "total": len(summary)}
+
+
+@app.get("/api/voice/sessions/{session_id}/history")
+async def voice_session_history(session_id: str) -> dict[str, Any]:
+    """Return full turn history for a session."""
+    with _voice_session_lock:
+        data = _voice_sessions.get(session_id, {})
+        turns = list(data.get("_turns", []))
+    return {"ok": True, "session_id": session_id, "turn_count": len(turns), "turns": turns}
+
+
+@app.post("/api/voice/turn")
+async def voice_turn(req: VoiceTurnRequest) -> dict[str, Any]:  # noqa: C901
+    provider = await _select_provider(req.provider)
+    model = await _select_model(provider, req.model)
+    deep_provider = provider if req.deep_provider == "same" else req.deep_provider
+    deep_model = model if req.deep_provider == "same" and not req.deep_model else await _select_model(deep_provider, req.deep_model)
+
+    utterance = req.utterance.strip()
+    intent = _infer_intent(utterance)
+    extracted_location = _extract_location(utterance)
+    with _voice_session_lock:
+        session = _voice_sessions.setdefault(req.session_id, {})
+        remembered_location = session.get("last_location")
+    chosen_location = (req.location_hint or extracted_location or remembered_location or "").strip()
+
+    ack_messages = [
+        {"role": "system", "content": _workflow_prompts()["voice_ack_prompt"]},
+        {"role": "user", "content": f"Intent={intent}; User said: {utterance}"},
+    ]
+    try:
+        quick_ack = (await _call_provider_chat(provider, model, ack_messages)).strip()
+    except Exception:
+        quick_ack = "Got it. Working on that now."
+
+    if intent == "weather" and not chosen_location:
+        result = {
+            "ok": True,
+            "intent": intent,
+            "requires_clarification": True,
+            "quick_ack": quick_ack,
+            "response": "Sure — which city should I use for the weather report?",
+            "workflow_steps": ["quick_ack", "slot_check(location)", "clarification"],
+        }
+        with _voice_session_lock:
+            _voice_sessions.setdefault(req.session_id, {}).setdefault("_turns", []).append({
+                "timestamp_ms": int(time.time() * 1000),
+                "utterance": utterance,
+                "intent": intent,
+                "response": result["response"],
+            })
+        return result
+
+    if intent in {"weather", "world_news", "ai_news", "stock_market"}:
+        topic = "stock_market" if intent == "stock_market" else intent
+        report = await _agentic_speak_boilerplate(
+            topic=topic,
+            provider=deep_provider if req.use_deep_reasoner else provider,
+            model=deep_model if req.use_deep_reasoner else model,
+            location=chosen_location or "Vienna",
+            symbols=["^GSPC", "^IXIC", "^DJI"],
+            style="normal",
+        )
+        if topic == "weather" and chosen_location:
+            with _voice_session_lock:
+                _voice_sessions.setdefault(req.session_id, {})["last_location"] = chosen_location
+        result = {
+            "ok": True,
+            "intent": intent,
+            "quick_ack": quick_ack,
+            "response": report["spoken_text"],
+            "provider": provider,
+            "model": model,
+            "deep_provider": deep_provider,
+            "deep_model": deep_model,
+            "research_data": report["research_data"],
+            "sources": report["sources"],
+            "workflow_steps": [
+                "quick_ack",
+                "intent_resolution",
+                "agentic_research",
+                "deep_reasoner_synthesis",
+                "tts_ready_output",
+            ],
+        }
+        with _voice_session_lock:
+            _voice_sessions.setdefault(req.session_id, {}).setdefault("_turns", []).append({
+                "timestamp_ms": int(time.time() * 1000),
+                "utterance": utterance,
+                "intent": intent,
+                "response": report["spoken_text"],
+            })
+        return result
+
+    deep_system = (
+        _workflow_prompts()["voice_reasoner_prompt"]
+        + "\nThis is a general turn, no external tool results are attached."
+    )
+    deep_user = f"User utterance: {utterance}"
+    response = await _call_provider_chat(
+        deep_provider if req.use_deep_reasoner else provider,
+        deep_model if req.use_deep_reasoner else model,
+        [{"role": "system", "content": deep_system}, {"role": "user", "content": deep_user}],
+    )
+    result = {
+        "ok": True,
+        "intent": "general",
+        "quick_ack": quick_ack,
+        "response": response.strip(),
+        "provider": provider,
+        "model": model,
+        "deep_provider": deep_provider,
+        "deep_model": deep_model,
+        "workflow_steps": ["quick_ack", "deep_reasoner_final_answer", "tts_ready_output"],
+    }
+    with _voice_session_lock:
+        _voice_sessions.setdefault(req.session_id, {}).setdefault("_turns", []).append({
+            "timestamp_ms": int(time.time() * 1000),
+            "utterance": utterance,
+            "intent": "general",
+            "response": response.strip(),
+        })
+    return result
 

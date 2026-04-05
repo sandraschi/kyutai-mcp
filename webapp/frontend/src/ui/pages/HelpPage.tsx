@@ -116,6 +116,32 @@ function McpTab() {
         </p>
       </Block>
 
+      <Block title="Advanced voice tools">
+        <p>
+          This server also exposes staged voice orchestration helpers via web API:
+          <span className="font-mono"> POST /api/voice/turn</span>,
+          <span className="font-mono"> POST /api/voice/speak_boilerplate</span>,
+          <span className="font-mono"> GET /api/voice/workflows</span>.
+        </p>
+        <p>
+          The intent is hybrid operation: Moshi remains the realtime voice UX, while deeper understanding/writing can
+          be delegated to a stronger reasoner model in a second stage.
+        </p>
+      </Block>
+
+      <Block title="Prompt/skill pack (agentic workflows)">
+        <ul className="list-inside list-disc space-y-1 text-slate-400">
+          <li><span className="font-mono">voice_ack_prompt</span> — immediate spoken ack in &lt;= 18 words</li>
+          <li><span className="font-mono">voice_reasoner_prompt</span> — tool-grounded final spoken answer</li>
+          <li><span className="font-mono">speak_boilerplate_prompt</span> — briefing synthesis for TTS</li>
+        </ul>
+        <p>
+          Skill chain: <span className="font-mono">quick_ack</span> → <span className="font-mono">intent_resolution</span> →{" "}
+          <span className="font-mono">agentic_research</span> → <span className="font-mono">deep_reasoner_synthesis</span> →{" "}
+          <span className="font-mono">tts_ready_output</span>.
+        </p>
+      </Block>
+
       <Block title="Transports">
         <ul className="list-inside list-disc space-y-2">
           <li>
@@ -283,12 +309,38 @@ function WebappTab() {
           <span>POST /api/moshi/ops</span>
           <span>POST /api/chat/refine</span>
           <span>POST /api/chat/message</span>
+          <span>POST /api/voice/turn</span>
+          <span>POST /api/voice/speak_boilerplate</span>
+          <span>GET /api/voice/workflows</span>
+        </div>
+      </Block>
+
+      <Block title="Usage examples">
+        <div className="space-y-3 text-xs font-mono text-slate-400">
+          <pre className="overflow-auto rounded-lg border border-white/10 bg-slate-950/40 p-3">
+{`POST /api/voice/turn
+{
+  "session_id": "desk",
+  "utterance": "hi moshi weather report please for vienna",
+  "provider": "auto",
+  "use_deep_reasoner": true
+}`}
+          </pre>
+          <pre className="overflow-auto rounded-lg border border-white/10 bg-slate-950/40 p-3">
+{`POST /api/voice/speak_boilerplate
+{
+  "topic": "ai_news",
+  "provider": "auto",
+  "style": "brief"
+}`}
+          </pre>
         </div>
       </Block>
 
       <Block title="Repo">
         <p className="text-slate-400">
-          <span className="font-mono">docs/WEBAPP.md</span>, <span className="font-mono">docs/GLOM.md</span>.
+          <span className="font-mono">docs/WEBAPP.md</span>, <span className="font-mono">docs/GLOM.md</span>,{" "}
+          <span className="font-mono">docs/VOICE_WORKFLOWS.md</span>.
         </p>
       </Block>
     </div>
@@ -418,6 +470,11 @@ function JapanAiTab() {
           <li>
             Keep <Link className="text-amber-200 hover:underline" to="/status">Status</Link> open while testing: Glom
             probes and Moshi HTTP probe fail for different reasons (wrong port vs. model still loading).
+          </li>
+          <li>
+            For spoken briefings, call <span className="font-mono">/api/voice/speak_boilerplate</span> with{" "}
+            <span className="font-mono">topic=weather|world_news|stock_market|ai_news</span>, then feed the returned
+            text to your TTS/voice stage.
           </li>
         </ul>
       </Block>

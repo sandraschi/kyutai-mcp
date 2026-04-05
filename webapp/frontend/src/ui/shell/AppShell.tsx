@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   Activity,
+  AudioWaveform,
   Bot,
   Gauge,
   HelpCircle,
@@ -31,6 +32,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/apps": "Apps",
   "/moshi": "Talk with Moshi",
   "/talk": "Talk with Moshi",
+  "/voice": "Voice Pipeline",
   "/status": "Status",
   "/chat": "Chat",
   "/logs": "Logger",
@@ -44,6 +46,7 @@ const NAV: NavItem[] = [
   { to: "/tools", label: "Tools", icon: (p) => <Wrench {...p} /> },
   { to: "/apps", label: "Apps", icon: (p) => <LayoutGrid {...p} /> },
   { to: "/moshi", label: "Moshi", icon: (p) => <Mic2 {...p} /> },
+  { to: "/voice", label: "Voice", icon: (p) => <AudioWaveform {...p} /> },
   { to: "/status", label: "Status", icon: (p) => <Activity {...p} /> },
   { to: "/chat", label: "Chat", icon: (p) => <Bot {...p} /> },
   { to: "/logs", label: "Logger", icon: (p) => <ScrollText {...p} /> },

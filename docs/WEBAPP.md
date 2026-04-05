@@ -26,6 +26,7 @@ Ports are defined in `src/kyutai_mcp/config.py` (`KyutaiConfig`).
 | `/moshi`, `/talk` | Upstream Moshi UI (link + iframe + probe) |
 | `/status` | Runtime, Glom, Moshi service, tail logs |
 | `/chat` | Persona chat against Glom providers |
+| `/api/voice/*` | Advanced staged voice orchestration + agentic boilerplates (backend API surface) |
 | `/logs` | Full-page session logger (shared buffer with bottom panel) |
 | `/settings` | Moshi service command, cwd, HTTP URL |
 | `/help` | Extended in-app documentation |
@@ -49,3 +50,11 @@ From `webapp`:
 ```
 
 Clears listeners, starts backend + Vite. See `webapp/start.ps1` for flags.
+
+## Advanced voice APIs
+
+- `POST /api/voice/turn` — staged voice flow (ack -> intent -> optional research -> final spoken text)
+- `POST /api/voice/speak_boilerplate` — topic briefings (`weather`, `world_news`, `stock_market`, `ai_news`)
+- `GET /api/voice/workflows` — prompts, skills, and examples for integration
+
+See `docs/VOICE_WORKFLOWS.md` for request examples and design rationale.

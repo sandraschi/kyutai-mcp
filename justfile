@@ -30,44 +30,41 @@ default:
     Write-Host "`n  [System State: PROD/HARDENED]" -ForegroundColor DarkGray; \
     Write-Host ''
 
+# ── Operation ─────────────────────────────────────────────────────────────────
+
+# Start the Moshi MCP server
+serve:
+    uv run python -m kyutai_mcp
+
+# Start the SOTA web dashboard
+web:
+    Set-Location webapp; ./start.ps1
+
 # ── Quality ───────────────────────────────────────────────────────────────────
 
 # Execute Ruff SOTA v13.1 linting
 lint:
-    Set-Location '{{justfile_directory()}}'
     uv run ruff check .
+    Set-Location '{{justfile_directory()}}\webapp\frontend'
+    npx @biomejs/biome ci .
 
 # Execute Ruff SOTA v13.1 fix and formatting
 fix:
-    Set-Location '{{justfile_directory()}}'
     uv run ruff check . --fix --unsafe-fixes
     uv run ruff format .
+    Set-Location '{{justfile_directory()}}\webapp\frontend'
+    npx @biomejs/biome check --write .
+
+# Run pytest suite
+test:
+    uv run pytest -q
 
 # ── Hardening ─────────────────────────────────────────────────────────────────
 
 # Execute Bandit security audit
 check-sec:
-    Set-Location '{{justfile_directory()}}'
     uv run bandit -r src/
 
 # Execute safety audit of dependencies
 audit-deps:
-    Set-Location '{{justfile_directory()}}'
     uv run safety check
-
-set shell := ["powershell.exe", "-NoProfile", "-Command"]
-
-stats:
-  uv run python tools/repo_stats.py
-
-fmt:
-  uv run ruff format .
-
-test:
-  uv run pytest -q
-
-serve:
-  uv run python -m kyutai_mcp
-
-web:
-  Set-Location webapp; .\\start.ps1

@@ -228,41 +228,26 @@ async def _fetch_rss(url: str, max_items: int = 6) -> list[dict[str, str]]:
 
 
 async def _fetch_stocks(symbols: list[str]) -> list[dict[str, Any]]:
-    """Fetch stock quotes via Finnhub (free tier, requires FINNHUB_API_KEY).
-
-    If no key is configured, returns a stub explaining the situation rather
-    than hitting an unofficial endpoint that may be blocked.
-
-    Free key: https://finnhub.io/register (60 req/min, no CC required)
-    """
-    api_key = os.environ.get("FINNHUB_API_KEY", "").strip()
-    if not api_key:
-        return [{"error": "FINNHUB_API_KEY not set", "hint": "Get a free key at https://finnhub.io/register"}]
-
-    normalized = [s.strip().upper() for s in symbols if s.strip()] or ["^GSPC", "AAPL", "NVDA"]
-    results: list[dict[str, Any]] = []
+    normalized = [s.strip().upper() for s in symbols if s.strip()] or ["^GSPC", "^IXIC", "^DJI"]
+    encoded = urllib.parse.quote(",".join(normalized), safe=",")
     async with httpx.AsyncClient() as client:
-        for symbol in normalized[:5]:  # cap at 5 to stay within free rate limits
-            try:
-                r = await client.get(
-                    "https://finnhub.io/api/v1/quote",
-                    params={"symbol": symbol, "token": api_key},
-                    timeout=5.0,
-                )
-                r.raise_for_status()
-                q = r.json()
-                results.append({
-                    "symbol": symbol,
-                    "price": q.get("c"),          # current price
-                    "change": q.get("d"),          # change
-                    "change_percent": q.get("dp"), # change percent
-                    "high": q.get("h"),
-                    "low": q.get("l"),
-                    "prev_close": q.get("pc"),
-                })
-            except Exception as e:
-                results.append({"symbol": symbol, "error": str(e)})
-    return results
+        r = await client.get(
+            f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={encoded}",
+            timeout=8.0,
+        )
+        r.raise_for_status()
+        result = r.json().get("quoteResponse", {}).get("result", [])
+    return [
+        {
+            "symbol": q.get("symbol"),
+            "name": q.get("shortName") or q.get("longName"),
+            "price": q.get("regularMarketPrice"),
+            "change": q.get("regularMarketChange"),
+            "change_percent": q.get("regularMarketChangePercent"),
+            "currency": q.get("currency"),
+        }
+        for q in result if isinstance(q, dict)
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -405,7 +390,7 @@ async def voice_turn_impl(
             provider=dprov if use_deep_reasoner else prov,
             model=dmdl if use_deep_reasoner else mdl,
             location=chosen_location or "Vienna",
-            symbols=["SPY", "QQQ", "AAPL", "NVDA"],
+            symbols=["^GSPC", "^IXIC", "^DJI"],
             style="normal",
         )
         if intent == "weather" and chosen_location:

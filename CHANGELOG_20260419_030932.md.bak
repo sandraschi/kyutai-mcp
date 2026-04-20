@@ -2,24 +2,7 @@
 
 All notable changes to **kyutai-mcp** will be documented in this file.
 
-## [0.2.1] — 2026-04-19
-
-### Fixed
-- `MCP_CATALOG` in `webapp/backend/app.py` listed only 6 `voice_pipeline` operations — missing the 4 proxy ops added in v0.2.0 (`proxy_status`, `proxy_start`, `proxy_stop`, `proxy_transcript`). The catalog is used by the dashboard Tools page and agent discovery; this caused those operations to be invisible to agents using catalog-based introspection.
-- Removed dead `prefab-ui>=0.14.0` dependency from `pyproject.toml` — nothing in the codebase imports prefab_ui.
-- **Replaced Yahoo Finance `v7/finance/quote` with Finnhub** — the Yahoo endpoint is unofficial, intermittently blocked, and has no documented stability. Both `voice_pipeline.py` and `app.py` now use `https://finnhub.io/api/v1/quote` with `FINNHUB_API_KEY`. If the key is not set, the feature returns a clear error with a link to register rather than silently failing. Free key at https://finnhub.io/register (60 req/min, no CC).
-- Default stock symbols changed from Yahoo index tickers (`^GSPC`, `^IXIC`, `^DJI`) to ETF equivalents (`SPY`, `QQQ`, `AAPL`, `NVDA`) which are supported by Finnhub's free tier.
-
-### Changed
-- README: FastMCP badge updated from `3.1.0` to `3.1+`
-- README: Added cross-reference table comparing kyutai-mcp (local/offline) with speech-mcp (cloud APIs)
-
-### Known issues (not fixed, documented)
-- `pyproject.toml` pins `fastmcp>=3.1.0`; FastMCP 3.2 changed the `mcp.run()` HTTP transport kwargs. Upgrade to 3.2 requires testing the HTTP transport path in `server.py`.
-- `proxy_start_impl` and `moshi_service_start_impl` derive log directory path from `__file__` — works in dev layout, breaks if package is installed outside the repo.
-- Yahoo Finance `v7/finance/quote` endpoint used for stock data is unofficial and intermittently blocked. No fallback implemented.
-
-
+## [0.2.0] — 2026-03-28
 
 ### Added
 - **Persona-aware WebSocket proxy** (`proxy/moshi_proxy.py`) — transparent relay on port 8999 that sits between clients and Moshi (8998). Relays audio untouched, taps `0x02` text tokens for transcript capture.

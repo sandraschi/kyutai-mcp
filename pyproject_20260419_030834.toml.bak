@@ -16,6 +16,7 @@ dependencies = [
   "httpx>=0.27.0",
   "nvidia-ml-py>=12.560.30; platform_system == 'Windows' or platform_system == 'Linux'",
   "aiohttp>=3.13.3",
+  "prefab-ui>=0.14.0",
 ]
 
 [project.scripts]

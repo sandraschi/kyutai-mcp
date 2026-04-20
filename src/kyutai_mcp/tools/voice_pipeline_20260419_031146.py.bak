@@ -405,7 +405,7 @@ async def voice_turn_impl(
             provider=dprov if use_deep_reasoner else prov,
             model=dmdl if use_deep_reasoner else mdl,
             location=chosen_location or "Vienna",
-            symbols=["SPY", "QQQ", "AAPL", "NVDA"],
+            symbols=["^GSPC", "^IXIC", "^DJI"],
             style="normal",
         )
         if intent == "weather" and chosen_location:

@@ -1,3 +1,13 @@
+﻿Param([switch]$Headless)
+
+# --- SOTA Headless Standard ---
+if ($Headless -and ($Host.UI.RawUI.WindowTitle -notmatch 'Hidden')) {
+    Start-Process pwsh -ArgumentList '-NoProfile', '-File', $PSCommandPath, '-Headless' -WindowStyle Hidden
+    exit
+}
+$WindowStyle = if ($Headless) { 'Hidden' } else { 'Normal' }
+# ------------------------------
+
 <#
 .SYNOPSIS
 Starts kyutai-mcp web backend and frontend.
@@ -179,4 +189,5 @@ try {
   Write-Log "Check firewall/proxy and run this script from: $PSScriptRoot" "ERROR"
   exit 1
 }
+
 

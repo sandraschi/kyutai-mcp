@@ -805,45 +805,31 @@ async def _fetch_rss_headlines(url: str, max_items: int = 6) -> list[dict[str, s
 
 
 async def _fetch_stock_snapshot(symbols: list[str]) -> list[dict[str, Any]]:
-    """Fetch stock quotes via Finnhub (free tier, requires FINNHUB_API_KEY).
-
-    If no key is set, returns a stub rather than hitting Yahoo Finance's
-    unofficial v7 endpoint which is rate-limited and intermittently blocked.
-
-    Free key: https://finnhub.io/register (60 req/min, no CC required)
-    Set FINNHUB_API_KEY in your environment to enable this feature.
-    """
-    api_key = os.environ.get("FINNHUB_API_KEY", "").strip()
-    if not api_key:
-        return [{"error": "FINNHUB_API_KEY not set", "hint": "Get a free key at https://finnhub.io/register"}]
-
     normalized = [s.strip().upper() for s in symbols if s.strip()]
     if not normalized:
-        normalized = ["SPY", "QQQ", "AAPL", "NVDA"]
-
-    results: list[dict[str, Any]] = []
+        normalized = ["^GSPC", "^IXIC", "^DJI"]
+    encoded = urllib.parse.quote(",".join(normalized), safe=",")
+    url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={encoded}"
     async with httpx.AsyncClient() as client:
-        for symbol in normalized[:5]:  # cap at 5 — free tier is 60 req/min
-            try:
-                r = await client.get(
-                    "https://finnhub.io/api/v1/quote",
-                    params={"symbol": symbol, "token": api_key},
-                    timeout=5.0,
-                )
-                r.raise_for_status()
-                q = r.json()
-                results.append({
-                    "symbol": symbol,
-                    "price": q.get("c"),
-                    "change": q.get("d"),
-                    "change_percent": q.get("dp"),
-                    "high": q.get("h"),
-                    "low": q.get("l"),
-                    "prev_close": q.get("pc"),
-                })
-            except Exception as e:
-                results.append({"symbol": symbol, "error": str(e)})
-    return results
+        resp = await client.get(url, timeout=8.0)
+        resp.raise_for_status()
+        payload = resp.json()
+    result = payload.get("quoteResponse", {}).get("result", []) if isinstance(payload, dict) else []
+    out: list[dict[str, Any]] = []
+    for item in result:
+        if not isinstance(item, dict):
+            continue
+        out.append(
+            {
+                "symbol": item.get("symbol"),
+                "name": item.get("shortName") or item.get("longName"),
+                "price": item.get("regularMarketPrice"),
+                "change": item.get("regularMarketChange"),
+                "change_percent": item.get("regularMarketChangePercent"),
+                "currency": item.get("currency"),
+            }
+        )
+    return out
 
 
 def _workflow_prompts() -> dict[str, Any]:
@@ -1075,7 +1061,7 @@ async def voice_turn(req: VoiceTurnRequest) -> dict[str, Any]:  # noqa: C901
             provider=deep_provider if req.use_deep_reasoner else provider,
             model=deep_model if req.use_deep_reasoner else model,
             location=chosen_location or "Vienna",
-            symbols=["SPY", "QQQ", "AAPL", "NVDA"],
+            symbols=["^GSPC", "^IXIC", "^DJI"],
             style="normal",
         )
         if topic == "weather" and chosen_location:

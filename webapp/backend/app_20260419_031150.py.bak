@@ -1075,7 +1075,7 @@ async def voice_turn(req: VoiceTurnRequest) -> dict[str, Any]:  # noqa: C901
             provider=deep_provider if req.use_deep_reasoner else provider,
             model=deep_model if req.use_deep_reasoner else model,
             location=chosen_location or "Vienna",
-            symbols=["SPY", "QQQ", "AAPL", "NVDA"],
+            symbols=["^GSPC", "^IXIC", "^DJI"],
             style="normal",
         )
         if topic == "weather" and chosen_location:

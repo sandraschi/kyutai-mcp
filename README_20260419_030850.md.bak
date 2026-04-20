@@ -76,26 +76,7 @@ Wire this in Cursor/your client as a stdio MCP server. See [docs/MCP.md](docs/MC
 ---
 
 
-## Related: speech-mcp (cloud voice)
-
-**[speech-mcp](https://github.com/sandraschi/speech-mcp)** is the cloud counterpart to this project. Where kyutai-mcp runs Moshi locally on your GPU, speech-mcp connects to cloud speech APIs.
-
-| | kyutai-mcp (this repo) | speech-mcp |
-|---|---|---|
-| Engine | Moshi (Kyutai, open-source) | Gemini Live, Gemini TTS, Hume, ElevenLabs |
-| Runs on | Local GPU (RTX 4090, CUDA) | Cloud APIs |
-| Privacy | Fully offline | Cloud |
-| Latency | Low (local) | Sub-second (Gemini Live) |
-| Voice quality | Good | Very good to highest |
-| Voice cloning | No | Yes (ElevenLabs IVC) |
-| Multilingual | Limited | 100+ languages (Gemini TTS) |
-| Cost | Free after hardware | API usage costs |
-
-Use kyutai-mcp when privacy or offline operation matters. Use speech-mcp when voice quality, multilingual coverage, or voice cloning is the priority. Both expose the same portmanteau MCP tool pattern and can be run simultaneously on different ports.
-
----
-
-
+## 🛡️ Industrial Quality Stack
 
 This project adheres to **SOTA 14.1** industrial standards for high-fidelity agentic orchestration:
 

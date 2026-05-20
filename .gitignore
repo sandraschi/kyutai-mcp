@@ -24,3 +24,5 @@ webapp/frontend/.vite/
 # Logs
 *.log
 
+
+_dashboard/

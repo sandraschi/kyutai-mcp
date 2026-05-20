@@ -4,6 +4,14 @@
 
 # kyutai-mcp
 
+<p align="center">
+  <a href="https://github.com/casey/just"><img src="https://img.shields.io/badge/just-ready_to_go-7c5cfc?style=flat-square&logo=just&logoColor=white" alt="Just"></a>
+  <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff"></a>
+  <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.13+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python"></a>
+  <a href="https://biomejs.dev"><img src="https://img.shields.io/badge/Linted_with-Biome-60a5fa?style=flat-square&logo=biome&logoColor=white" alt="Biome"></a>
+  <a href="https://github.com/PrefectHQ/fastmcp"><img src="https://img.shields.io/badge/FastMCP-3.2-7c5cfc?style=flat-square" alt="FastMCP"></a>
+</p>
+
 ### Run **Kyutai Moshi** locally. Drive it from a **glass dashboard**, and plug the same surface into your **agent stack** via **FastMCP**.
 
 [Quick start](#quick-start)  [Web UI](#web-dashboard)  [Technical docs](docs/)
@@ -14,36 +22,19 @@ FastMCP **3.1+**  stdio + HTTP `/mcp`  web **10924** / **10925**  MCP HTTP **109
 
 ---
 
-## Why this exists
-
-**Moshi** is Kyutais real-time speech model: listen and respond with low latency. Getting the upstream runtime, probes, and operator workflows right takes glueespecially if you also want **MCP tools** for IDEs and automation.
-
-**kyutai-mcp** gives you:
-
-- A **web operator console** (start/stop, status, logs, Glom-On local LLM, chat, session logger).
-- A **portmanteau MCP tool** (`moshi_ops`) plus catalog-friendly HTTP discovery.
-- **Glom-On**: optional **Ollama** (11434) or **LM Studio** (1234) for in-dashboard chat and prompt refinementno cloud required when local models are up.
-
----
-
-## Quick start
-
-**Prerequisites:** Python 3.12+, [uv](https://docs.astral.sh/uv/), Node 20+ (for the webapp).
+## Quick Start
 
 ```powershell
-cd path\to\kyutai-mcp
-uv sync
-cd webapp
-.\start.ps1
+git clone https://github.com/sandraschi/kyutai-mcp
+cd kyutai-mcp
+just
 ```
 
-- **Dashboard:** http://127.0.0.1:10925  
-- **API:** http://127.0.0.1:10924/api/health  
-- **MCP HTTP:** http://127.0.0.1:10926/mcp  
+This opens an interactive dashboard showing all available commands. Run `just bootstrap` to install dependencies, then `just serve` or `just dev` to start.
 
-Configure your **Moshi** backend under **Settings  Moshi Service**, then use **Actions** to start and **Status** or **Logger** to observe.
+### Manual Setup
 
----
+If you don't have `just` installed:
 
 ## Web dashboard
 

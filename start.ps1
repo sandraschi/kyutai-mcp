@@ -1,15 +1,21 @@
-Param([switch]$Headless)
+param(
+    [switch]$Headless,
+    [switch]$BackendOnly,
+    [switch]$NoBrowser,
+    [switch]$NoOpen
+)
 
-# --- SOTA Headless Standard ---
-if ($Headless -and ($Host.UI.RawUI.WindowTitle -notmatch 'Hidden')) {
-    Start-Process pwsh -ArgumentList '-NoProfile', '-File', $PSCommandPath, '-Headless' -WindowStyle Hidden
-    exit
+$delegate = Join-Path $PSScriptRoot "webapp\start.ps1"
+if (-not (Test-Path $delegate)) {
+    Write-Host "ERROR: Missing $delegate" -ForegroundColor Red
+    exit 1
 }
-$WindowStyle = if ($Headless) { 'Hidden' } else { 'Normal' }
-# ------------------------------
 
-$env:FASTMCP_LOG_LEVEL = 'WARNING'
-# kyutai-mcp Start - Standards-Compliant SOTA
-Write-Host 'Starting kyutai-mcp...' -ForegroundColor Cyan
+$args = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $delegate)
+if ($Headless) { $args += '-Headless' }
+if ($BackendOnly) { $args += '-BackendOnly' }
+if ($NoBrowser) { $args += '-NoBrowser' }
+if ($NoOpen) { $args += '-NoOpen' }
 
-uv run -m kyutai_mcp
+& powershell.exe @args
+exit $LASTEXITCODE

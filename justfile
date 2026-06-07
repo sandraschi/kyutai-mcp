@@ -1,46 +1,83 @@
-set windows-shell := ["pwsh.exe", "-NoLogo", "-Command"]
+﻿set windows-shell := ["pwsh.exe", "-NoLogo", "-Command"]
+
+REPO := justfile_directory()
+UV := env_var_or_default("UV_EXE", "uv")
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
 # Open the interactive recipe dashboard in the browser
 default:
-    @pwsh.exe -NoProfile -ExecutionPolicy Bypass -File ../mcp-central-docs/scripts/just-dashboard.ps1 -Path .
+    @just --list
+
+# ── Install ───────────────────────────────────────────────────────────────────
+
+# Install Python + frontend dependencies
+install bootstrap:
+    & "{{UV}}" sync
+    Set-Location "{{REPO}}\webapp\frontend"
+    npm install
 
 # ── Operation ─────────────────────────────────────────────────────────────────
 
-# Start the Moshi MCP server
-serve:
-    uv run python -m kyutai_mcp
+# Start full stack (canonical: webapp/start.ps1)
+start dev web:
+    Set-Location "{{REPO}}\webapp"
+    .\start.bat
 
-# Start the SOTA web dashboard
-web:
-    Set-Location webapp; ./start.ps1
+# Start full stack from repo root (delegates to webapp)
+start-root:
+    Set-Location "{{REPO}}"
+    .\start.bat
+
+# Start stdio MCP server only (Claude Desktop / Cursor)
+serve mcp:
+    & "{{UV}}" run python -m kyutai_mcp
+
+# Start MCP HTTP transport only (port 10926)
+mcp-http:
+    & "{{UV}}" run uvicorn kyutai_mcp.mcp_http:app --host 127.0.0.1 --port 10926
+
+# Pre-download Moshi HF weights (no GPU load)
+download-moshi:
+    & "{{UV}}" run python tools/download_moshi_weights.py
+
+# Install Pocket TTS optional backend (CPU TTS on :10929)
+bootstrap-pocket-tts:
+    pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File "{{REPO}}\tools\bootstrap_pocket_tts.ps1"
 
 # ── Quality ───────────────────────────────────────────────────────────────────
 
-# Execute Ruff SOTA v13.1 linting
+# Quick import smoke test
+check:
+    & "{{UV}}" run python -c "import kyutai_mcp.server, kyutai_mcp.mcp_http; print('Import OK')"
+
+# Execute Ruff SOTA linting
 lint:
-    uv run ruff check .
-    Set-Location '{{justfile_directory()}}\webapp\frontend'
+    & "{{UV}}" run ruff check .
+    Set-Location '{{REPO}}\webapp\frontend'
     npx @biomejs/biome ci .
 
-# Execute Ruff SOTA v13.1 fix and formatting
+# Execute Ruff fix and formatting
 fix:
-    uv run ruff check . --fix --unsafe-fixes
-    uv run ruff format .
-    Set-Location '{{justfile_directory()}}\webapp\frontend'
+    & "{{UV}}" run ruff check . --fix --unsafe-fixes
+    & "{{UV}}" run ruff format .
+    Set-Location '{{REPO}}\webapp\frontend'
     npx @biomejs/biome check --write .
 
 # Run pytest suite
 test:
-    uv run pytest -q
+    & "{{UV}}" run pytest -q
+
+e2e:
+    pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File "D:\Dev\repos\mcp-central-docs\scripts\playwright-audit.ps1" -RepoPath "{{REPO}}"
 
 # ── Hardening ─────────────────────────────────────────────────────────────────
 
 # Execute Bandit security audit
 check-sec:
-    uv run bandit -r src/
+    & "{{UV}}" run bandit -r src/
 
 # Execute safety audit of dependencies
 audit-deps:
-    uv run safety check
+    & "{{UV}}" run safety check
+

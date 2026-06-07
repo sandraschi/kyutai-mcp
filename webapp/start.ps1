@@ -1,193 +1,249 @@
-﻿Param([switch]$Headless)
+﻿param(
+    [switch]$Headless,
+    [switch]$BackendOnly,
+    [switch]$NoBrowser,
+    [switch]$NoOpen
+)
 
 # --- SOTA Headless Standard ---
 if ($Headless -and ($Host.UI.RawUI.WindowTitle -notmatch 'Hidden')) {
-    Start-Process pwsh -ArgumentList '-NoProfile', '-File', $PSCommandPath, '-Headless' -WindowStyle Hidden
+    $relaunch = @('-NoProfile', '-File', $PSCommandPath, '-Headless')
+    if ($BackendOnly) { $relaunch += '-BackendOnly' }
+    if ($NoBrowser) { $relaunch += '-NoBrowser' }
+    if ($NoOpen) { $relaunch += '-NoOpen' }
+    Start-Process powershell.exe -ArgumentList $relaunch -WindowStyle Hidden
     exit
 }
-$WindowStyle = if ($Headless) { 'Hidden' } else { 'Normal' }
 # ------------------------------
 
 <#
 .SYNOPSIS
-Starts kyutai-mcp web backend and frontend.
+Starts the full kyutai-mcp stack (canonical fleet launcher).
 
 .DESCRIPTION
-Fleet-standard startup script with:
-- prerequisite validation (uv, npm, paths)
-- port cleanup
-- retry helper for transient failures
-- readiness checks
-- actionable logging and deterministic exit codes
+Full stack: Moshi bootstrap, backend :10924, MCP HTTP :10926, frontend :10925.
+Repo-root start.bat delegates here. Stdio MCP only: just mcp / uv run python -m kyutai_mcp.
 #>
 
-[CmdletBinding()]
-param(
-  [switch]$NoOpen
-)
+if ($NoBrowser -and -not $NoOpen) { $NoOpen = $true }
+
+Write-Host ""
+Write-Host "kyutai-mcp - Full stack start" -ForegroundColor Cyan
+Write-Host "Backend :10924   Frontend :10925   MCP HTTP :10926   Moshi :8998   Pocket TTS :10929 (optional)" -ForegroundColor DarkGray
+Write-Host ""
 
 $ErrorActionPreference = "Stop"
 $BackendPort = 10924
 $FrontendPort = 10925
+$McpHttpPort = 10926
 $HostIp = "127.0.0.1"
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $FrontendDir = Join-Path $PSScriptRoot "frontend"
 
 function Write-Log {
-  param(
-    [string]$Message,
-    [ValidateSet("INFO", "WARN", "ERROR")] [string]$Level = "INFO"
-  )
-  $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-  Write-Host "[$ts][$Level] $Message"
+    param(
+        [string]$Message,
+        [ValidateSet("INFO", "WARN", "ERROR")] [string]$Level = "INFO"
+    )
+    $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    Write-Host "[$ts][$Level] $Message"
 }
 
 function Invoke-WithRetry {
-  param(
-    [scriptblock]$ScriptBlock,
-    [string]$OperationName,
-    [int]$MaxRetries = 3,
-    [int]$InitialDelaySeconds = 1
-  )
-  $attempt = 0
-  $delay = $InitialDelaySeconds
-  while ($attempt -le $MaxRetries) {
-    try {
-      return & $ScriptBlock
-    } catch {
-      $attempt = $attempt + 1
-      if ($attempt -gt $MaxRetries) {
-        Write-Log "Operation failed after retries: $OperationName. $($_.Exception.Message)" "ERROR"
-        throw
-      }
-      Write-Log "Operation retry $attempt/${MaxRetries}: $OperationName" "WARN"
-      Start-Sleep -Seconds $delay
-      $delay = [Math]::Min($delay * 2, 8)
+    param(
+        [scriptblock]$ScriptBlock,
+        [string]$OperationName,
+        [int]$MaxRetries = 3,
+        [int]$InitialDelaySeconds = 1
+    )
+    $attempt = 0
+    $delay = $InitialDelaySeconds
+    while ($attempt -le $MaxRetries) {
+        try {
+            return & $ScriptBlock
+        } catch {
+            $attempt = $attempt + 1
+            if ($attempt -gt $MaxRetries) {
+                Write-Log "Operation failed after retries: $OperationName. $($_.Exception.Message)" "ERROR"
+                throw
+            }
+            Write-Log "Operation retry $attempt/${MaxRetries}: $OperationName" "WARN"
+            Start-Sleep -Seconds $delay
+            $delay = [Math]::Min($delay * 2, 8)
+        }
     }
-  }
 }
 
 function Test-CommandExists {
-  param([string]$Name)
-  $cmd = Get-Command $Name -ErrorAction SilentlyContinue
-  if ($null -eq $cmd) {
-    throw "Required command '$Name' not found in PATH."
-  }
+    param([string]$Name)
+    $cmd = Get-Command $Name -ErrorAction SilentlyContinue
+    if ($null -eq $cmd) {
+        throw "Required command '$Name' not found in PATH."
+    }
 }
 
 function Resolve-NpmCommand {
-  $npmCmd = Get-Command "npm.cmd" -ErrorAction SilentlyContinue
-  if ($null -ne $npmCmd) {
-    return $npmCmd.Source
-  }
-  $npm = Get-Command "npm" -ErrorAction SilentlyContinue
-  if ($null -ne $npm) {
-    return $npm.Source
-  }
-  throw "Required command 'npm' not found in PATH."
+    $npmCmd = Get-Command "npm.cmd" -ErrorAction SilentlyContinue
+    if ($null -ne $npmCmd) {
+        return $npmCmd.Source
+    }
+    $npm = Get-Command "npm" -ErrorAction SilentlyContinue
+    if ($null -ne $npm) {
+        return $npm.Source
+    }
+    throw "Required command 'npm' not found in PATH."
 }
 
 function Stop-PortListeners {
-  param([int]$Port)
-  $connections = @()
-  try {
-    $connections = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
-  } catch {
+    param([int]$Port)
     $connections = @()
-  }
-  foreach ($c in $connections) {
     try {
-      if ($null -ne $c.OwningProcess -and $c.OwningProcess -gt 0) {
-        Stop-Process -Id $c.OwningProcess -Force -ErrorAction SilentlyContinue
-      }
+        $connections = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
     } catch {
-      Write-Log "Could not stop process $($c.OwningProcess) on port $Port" "WARN"
+        $connections = @()
     }
-  }
+    foreach ($c in $connections) {
+        try {
+            if ($null -ne $c.OwningProcess -and $c.OwningProcess -gt 0) {
+                Stop-Process -Id $c.OwningProcess -Force -ErrorAction SilentlyContinue
+            }
+        } catch {
+            Write-Log "Could not stop process $($c.OwningProcess) on port $Port" "WARN"
+        }
+    }
 }
 
 function Wait-HttpReady {
-  param(
-    [string]$Url,
-    [int]$MaxAttempts = 20,
-    [int]$DelayMs = 500
-  )
-  for ($i = 0; $i -lt $MaxAttempts; $i = $i + 1) {
-    try {
-      $response = Invoke-WebRequest -UseBasicParsing -Uri $Url -TimeoutSec 2
-      if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 500) {
-        return $true
-      }
-    } catch {
-      Start-Sleep -Milliseconds $DelayMs
+    param(
+        [string]$Url,
+        [int]$MaxAttempts = 30,
+        [int]$DelayMs = 500
+    )
+    for ($i = 0; $i -lt $MaxAttempts; $i = $i + 1) {
+        try {
+            $response = Invoke-WebRequest -UseBasicParsing -Uri $Url -TimeoutSec 2
+            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 500) {
+                return $true
+            }
+        } catch {
+            Start-Sleep -Milliseconds $DelayMs
+        }
     }
-  }
-  return $false
+    return $false
 }
 
 try {
-  Write-Log "Validating prerequisites"
-  Test-CommandExists -Name "uv"
-  $npmPath = Resolve-NpmCommand
-  if (-not (Test-Path $FrontendDir)) {
-    throw "Frontend directory missing: $FrontendDir"
-  }
-
-  Write-Log "Clearing ports $BackendPort and $FrontendPort"
-  Stop-PortListeners -Port $BackendPort
-  Stop-PortListeners -Port $FrontendPort
-
-  Write-Log "Starting backend on $HostIp`:$BackendPort"
-  $backendArgs = @(
-    "run", "uvicorn",
-    "webapp.backend.app:app",
-    "--host", $HostIp,
-    "--port", "$BackendPort"
-  )
-  $backendProc = Invoke-WithRetry -OperationName "start backend" -ScriptBlock {
-    Start-Process -WorkingDirectory $RepoRoot -FilePath "uv" -ArgumentList $backendArgs -PassThru
-  }
-
-  if (-not (Test-Path (Join-Path $FrontendDir "node_modules"))) {
-    Write-Log "Installing frontend dependencies"
-    $installProc = Invoke-WithRetry -OperationName "npm install" -ScriptBlock {
-      Start-Process -WorkingDirectory $FrontendDir -FilePath $npmPath -ArgumentList @("install") -Wait -PassThru
+    Write-Log "Validating prerequisites"
+    Test-CommandExists -Name "uv"
+    $npmPath = Resolve-NpmCommand
+    if (-not (Test-Path $FrontendDir)) {
+        throw "Frontend directory missing: $FrontendDir"
     }
-    if ($installProc.ExitCode -ne 0) {
-      throw "npm install failed with exit code $($installProc.ExitCode)"
+
+    if ($env:KYUTAI_SKIP_MOSHI_BOOTSTRAP -eq "1") {
+        Write-Log "Skipping Moshi bootstrap (KYUTAI_SKIP_MOSHI_BOOTSTRAP=1)"
+    } else {
+        Write-Log "Checking Moshi deps (fast skip if already installed)"
+        $bootstrapProc = Start-Process -WorkingDirectory $RepoRoot -FilePath "powershell.exe" -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "tools\bootstrap_moshi.ps1") -Wait -PassThru -NoNewWindow
+        if ($bootstrapProc.ExitCode -ne 0) {
+            throw "Moshi bootstrap failed with exit code $($bootstrapProc.ExitCode)"
+        }
     }
-  }
 
-  Write-Log "Starting frontend on $HostIp`:$FrontendPort"
-  $frontendProc = Invoke-WithRetry -OperationName "start frontend" -ScriptBlock {
-    Start-Process -WorkingDirectory $FrontendDir -FilePath $npmPath -ArgumentList @("run", "dev") -PassThru
-  }
-  Start-Sleep -Milliseconds 700
-  if ($frontendProc.HasExited) {
-    throw "Frontend process exited immediately with code $($frontendProc.ExitCode)."
-  }
+    Write-Log "Smoke-testing import"
+    $importProc = Start-Process -WorkingDirectory $RepoRoot -FilePath "uv" -ArgumentList @("run", "python", "tools/smoke_import.py") -Wait -PassThru -NoNewWindow
+    if ($importProc.ExitCode -ne 0) {
+        throw "Import smoke test failed"
+    }
 
-  Write-Log "Waiting for backend readiness"
-  $backendReady = Wait-HttpReady -Url "http://$HostIp`:$BackendPort/api/health"
-  if (-not $backendReady) {
-    throw "Backend did not become ready on port $BackendPort."
-  }
+    Write-Log "Clearing ports $BackendPort, $FrontendPort, $McpHttpPort"
+    Stop-PortListeners -Port $BackendPort
+    Stop-PortListeners -Port $FrontendPort
+    Stop-PortListeners -Port $McpHttpPort
 
-  Write-Log "Waiting for frontend readiness"
-  $frontendReady = Wait-HttpReady -Url "http://$HostIp`:$FrontendPort/"
-  if (-not $frontendReady) {
-    throw "Frontend did not become ready on port $FrontendPort."
-  }
+    Write-Log "Starting backend on $HostIp`:$BackendPort"
+    $backendArgs = @(
+        "run", "uvicorn",
+        "webapp.backend.app:app",
+        "--host", $HostIp,
+        "--port", "$BackendPort"
+    )
+    $backendProc = Invoke-WithRetry -OperationName "start backend" -ScriptBlock {
+        Start-Process -WorkingDirectory $RepoRoot -FilePath "uv" -ArgumentList $backendArgs -PassThru
+    }
 
-  Write-Log "Startup complete. Backend PID=$($backendProc.Id), Frontend PID=$($frontendProc.Id)"
-  if (-not $NoOpen) {
-    Start-Process "http://$HostIp`:$FrontendPort/"
-  }
-  exit 0
+    Write-Log "Starting MCP HTTP on $HostIp`:$McpHttpPort"
+    $mcpArgs = @(
+        "run", "uvicorn",
+        "kyutai_mcp.mcp_http:app",
+        "--host", $HostIp,
+        "--port", "$McpHttpPort"
+    )
+    $mcpProc = Invoke-WithRetry -OperationName "start mcp http" -ScriptBlock {
+        Start-Process -WorkingDirectory $RepoRoot -FilePath "uv" -ArgumentList $mcpArgs -PassThru
+    }
+
+    $frontendProc = $null
+    if (-not $BackendOnly) {
+        if (-not (Test-Path (Join-Path $FrontendDir "node_modules"))) {
+            Write-Log "Installing frontend dependencies"
+            $installProc = Invoke-WithRetry -OperationName "npm install" -ScriptBlock {
+                Start-Process -WorkingDirectory $FrontendDir -FilePath $npmPath -ArgumentList @("install") -Wait -PassThru
+            }
+            if ($installProc.ExitCode -ne 0) {
+                throw "npm install failed with exit code $($installProc.ExitCode)"
+            }
+        }
+
+        Write-Log "Starting frontend on $HostIp`:$FrontendPort"
+        $frontendProc = Invoke-WithRetry -OperationName "start frontend" -ScriptBlock {
+            Start-Process -WorkingDirectory $FrontendDir -FilePath $npmPath -ArgumentList @("run", "dev") -PassThru
+        }
+        Start-Sleep -Milliseconds 700
+        if ($frontendProc.HasExited) {
+            throw "Frontend process exited immediately with code $($frontendProc.ExitCode)."
+        }
+    } else {
+        Write-Log "Skipping frontend (BackendOnly mode)"
+    }
+
+    Write-Log "Waiting for backend readiness"
+    $backendReady = Wait-HttpReady -Url "http://$HostIp`:$BackendPort/api/health"
+    if (-not $backendReady) {
+        throw "Backend did not become ready on port $BackendPort."
+    }
+
+    Write-Log "Waiting for MCP HTTP readiness"
+    $mcpReady = Wait-HttpReady -Url "http://$HostIp`:$McpHttpPort/health"
+    if (-not $mcpReady) {
+        throw "MCP HTTP did not become ready on port $McpHttpPort."
+    }
+
+    if (-not $BackendOnly) {
+        Write-Log "Waiting for frontend readiness"
+        $frontendReady = Wait-HttpReady -Url "http://$HostIp`:$FrontendPort/"
+        if (-not $frontendReady) {
+            throw "Frontend did not become ready on port $FrontendPort."
+        }
+    }
+
+    if ($BackendOnly) {
+        Write-Log "Startup complete (backend only). Backend PID=$($backendProc.Id), MCP PID=$($mcpProc.Id)"
+    } else {
+        Write-Log "Startup complete. Backend PID=$($backendProc.Id), MCP PID=$($mcpProc.Id), Frontend PID=$($frontendProc.Id)"
+    }
+    Write-Log "Backend  http://$HostIp`:$BackendPort"
+    if (-not $BackendOnly) {
+        Write-Log "Frontend http://$HostIp`:$FrontendPort"
+    }
+    Write-Log "MCP HTTP http://$HostIp`:$McpHttpPort/mcp"
+
+    if ((-not $BackendOnly) -and (-not $NoOpen)) {
+        Start-Process "http://$HostIp`:$FrontendPort/"
+    }
+    exit 0
 } catch {
-  Write-Log "Startup failed: $($_.Exception.Message)" "ERROR"
-  Write-Log "Check firewall/proxy and run this script from: $PSScriptRoot" "ERROR"
-  exit 1
+    Write-Log "Startup failed: $($_.Exception.Message)" "ERROR"
+    Write-Log "Run from repo root: powershell -File webapp\start.ps1" "ERROR"
+    exit 1
 }
-
-

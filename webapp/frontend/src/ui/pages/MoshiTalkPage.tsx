@@ -49,7 +49,7 @@ export function MoshiTalkPage() {
     <div className="space-y-4">
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
         <h2 className="text-xl font-semibold">Talk with Moshi</h2>
-        <p className="mt-2 text-sm text-slate-400">
+        <p className="mt-2 text-sm text-slate-300">
           The upstream Moshi stack serves its own browser UI (mic, playback, session) on the configured HTTP URL.
           This page links to it and shows whether the probe sees the service. It is not a replacement for Moshi’s
           full-duplex audio pipeline.
@@ -63,7 +63,7 @@ export function MoshiTalkPage() {
             Refresh status
           </button>
           <a
-            className="inline-flex items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-100 hover:bg-amber-400/15"
+            className="inline-flex items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-200 hover:bg-amber-400/15"
             href={url}
             target="_blank"
             rel="noreferrer"
@@ -79,33 +79,33 @@ export function MoshiTalkPage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
-          <div className="text-sm text-slate-400">Probe</div>
+          <div className="text-sm text-slate-300">Probe</div>
           <div className="mt-3 space-y-2 text-sm text-slate-200">
             <div>
-              HTTP URL: <span className="font-mono text-amber-100">{url}</span>
+              HTTP URL: <span className="font-mono text-amber-200">{url}</span>
             </div>
             <div>
               Process:{" "}
               {st?.running ? (
                 <span className="text-emerald-200">running</span>
               ) : (
-                <span className="text-slate-400">not running</span>
+                <span className="text-slate-300">not running</span>
               )}
             </div>
             <div>
               HTTP reachable:{" "}
               {probe?.ok ? <span className="text-emerald-200">yes</span> : <span className="text-rose-200">no</span>}
               {httpStatusFromDetail ? (
-                <span className="text-slate-500"> ({httpStatusFromDetail})</span>
+                <span className="text-slate-400"> ({httpStatusFromDetail})</span>
               ) : null}
             </div>
-            {probe?.detail ? <div className="text-xs text-slate-500">{probe.detail}</div> : null}
+            {probe?.detail ? <div className="text-sm text-slate-400">{probe.detail}</div> : null}
           </div>
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
-          <div className="text-sm text-slate-400">Embedded preview</div>
-          <p className="mt-2 text-xs text-slate-500">
+          <div className="text-sm text-slate-300">Embedded preview</div>
+          <p className="mt-2 text-sm text-slate-400">
             Some Moshi builds send X-Frame-Options and cannot be embedded. If the frame stays blank, use “Open Moshi
             UI”.
           </p>

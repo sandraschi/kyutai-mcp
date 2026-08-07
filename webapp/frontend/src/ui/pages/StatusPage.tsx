@@ -77,7 +77,7 @@ export function StatusPage() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-xl font-semibold">Status Observatory</h2>
-            <p className="mt-1 text-sm text-slate-400">
+            <p className="mt-1 text-sm text-slate-300">
               Runtime health, transport ports, and Glom-On provider detection.
             </p>
           </div>
@@ -100,7 +100,7 @@ export function StatusPage() {
 
       <section className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
-          <div className="text-sm text-slate-400">Service Runtime</div>
+          <div className="text-sm text-slate-300">Service Runtime</div>
           {service ? (
             <div className="mt-3 space-y-2 text-sm">
               <div>Service: <span className="text-slate-200">{service.service}</span></div>
@@ -111,12 +111,12 @@ export function StatusPage() {
               <div>MCP HTTP port: <span className="font-mono text-slate-200">{service.ports.mcp_http}</span></div>
             </div>
           ) : (
-            <div className="mt-3 text-sm text-slate-500">Loading...</div>
+            <div className="mt-3 text-sm text-slate-400">Loading...</div>
           )}
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
-          <div className="text-sm text-slate-400">Glom-On Discovery</div>
+          <div className="text-sm text-slate-300">Glom-On Discovery</div>
           {glom ? (
             <div className="mt-3 space-y-3">
               <div className="text-sm">
@@ -131,20 +131,20 @@ export function StatusPage() {
                       {provider.healthy ? "healthy" : "down"}
                     </span>
                   </div>
-                  <div className="mt-1 break-all font-mono text-xs text-slate-400">{provider.url}</div>
-                  <div className="mt-1 text-xs text-slate-500">{provider.details}</div>
+                  <div className="mt-1 break-all font-mono text-sm text-slate-300">{provider.url}</div>
+                  <div className="mt-1 text-sm text-slate-400">{provider.details}</div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="mt-3 text-sm text-slate-500">Loading...</div>
+            <div className="mt-3 text-sm text-slate-400">Loading...</div>
           )}
         </div>
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
-          <div className="text-sm text-slate-400">Moshi Service</div>
+          <div className="text-sm text-slate-300">Moshi Service</div>
           {moshi ? (
             <div className="mt-3 space-y-2 text-sm">
               <div>
@@ -162,17 +162,17 @@ export function StatusPage() {
                   {moshi.http_probe.ok ? "OK" : "FAIL"}
                 </span>
               </div>
-              <div className="text-xs text-slate-500">
+              <div className="text-sm text-slate-400">
                 Command: <span className="font-mono">{moshi.config.command || "(not set)"}</span>
               </div>
             </div>
           ) : (
-            <div className="mt-3 text-sm text-slate-500">Loading...</div>
+            <div className="mt-3 text-sm text-slate-400">Loading...</div>
           )}
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
-          <div className="text-sm text-slate-400">Moshi Logs (tail)</div>
+          <div className="text-sm text-slate-300">Moshi Logs (tail)</div>
           <pre className="mt-3 h-64 overflow-auto rounded-lg border border-white/10 bg-slate-950/30 p-3 text-xs text-slate-200">
             {moshiLogs.length ? moshiLogs.join("\n") : "No logs yet."}
           </pre>

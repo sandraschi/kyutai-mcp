@@ -67,7 +67,7 @@ export function LoggerPage() {
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
         <h2 className="text-xl font-semibold">Session logger</h2>
-        <p className="mt-2 text-sm text-slate-400">
+        <p className="mt-2 text-sm text-slate-300">
           Client-side trace from this browser session: Chat refine flow, and anything else that writes to the shared
           log buffer. For Moshi process stdout/stderr, use Status or the backend log file path shown there.
         </p>
@@ -107,10 +107,10 @@ export function LoggerPage() {
               key={lv}
               type="button"
               className={cn(
-                "rounded-full border px-3 py-1 text-xs",
+                "rounded-full border px-3 py-1 text-sm",
                 levels[lv]
-                  ? "border-amber-400/40 bg-amber-400/15 text-amber-100"
-                  : "border-white/10 bg-white/5 text-slate-500"
+                  ? "border-amber-400/40 bg-amber-400/15 text-amber-200"
+                  : "border-white/10 bg-white/5 text-slate-400"
               )}
               onClick={() => toggleLevel(lv)}
             >
@@ -121,23 +121,23 @@ export function LoggerPage() {
       </section>
 
       <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-white/10 bg-slate-950/40">
-        <div className="flex items-center justify-between border-b border-white/10 px-4 py-2 text-xs text-slate-400">
+        <div className="flex items-center justify-between border-b border-white/10 px-4 py-2 text-sm text-slate-300">
           <span>
             Showing {filtered.length} of {logs.length} entries (session cap 2000)
           </span>
         </div>
         <div
           ref={scrollerRef}
-          className="min-h-[50vh] flex-1 overflow-auto p-4 font-mono text-xs"
+          className="min-h-[50vh] flex-1 overflow-auto p-4 font-mono text-sm"
           onScroll={onScroll}
         >
           {filtered.length === 0 ? (
-            <div className="text-slate-500">No log lines match. Use Chat (Ctrl+K) to generate entries.</div>
+            <div className="text-slate-400">No log lines match. Use Chat (Ctrl+K) to generate entries.</div>
           ) : (
             filtered.map((l, idx) => (
               <div key={`${l.ts}-${idx}`} className={cn("py-0.5", levelClass(l.level))}>
-                <span className="text-slate-500">{new Date(l.ts).toLocaleTimeString()}</span>{" "}
-                <span className="text-slate-400">[{l.level}]</span> {l.message}
+                <span className="text-slate-300">{new Date(l.ts).toLocaleTimeString()}</span>{" "}
+                <span className="text-slate-300">[{l.level}]</span> {l.message}
               </div>
             ))
           )}

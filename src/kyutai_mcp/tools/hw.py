@@ -31,4 +31,3 @@ def get_gpu_summary() -> dict[str, object]:
             pynvml.nvmlShutdown()
     except Exception:
         return asdict(GpuSummary(name=None, vram_total_mb=None, backend="unknown"))
-

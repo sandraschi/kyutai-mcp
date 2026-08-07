@@ -54,6 +54,20 @@ The web backend exposes advanced staged voice APIs that pair well with MCP-drive
 
 These routes let you keep Moshi as the realtime voice layer while delegating deeper answer writing to a stronger model stage.
 
+## Voice backends tool: `kyutai_backends`
+
+Select and manage Kyutai stacks beyond Moshi. See [KYUTAI_BACKENDS.md](./KYUTAI_BACKENDS.md).
+
+| Operation | Description |
+|-----------|-------------|
+| `status` | Moshi + Pocket TTS + Unmute health |
+| `set_active` | `moshi` / `pocket_tts` / `unmute` |
+| `pocket_tts_start` / `pocket_tts_stop` | CPU TTS server on :10929 |
+| `pocket_tts_synthesize` | Text → WAV |
+| `unmute_probe` | WSL/Docker Unmute reachability |
+
+REST mirror: `GET /api/backends/status`, `POST /api/backends/pocket-tts/start`, etc.
+
 ## Discovery
 
 - **Catalog (dashboard):** `GET /api/mcp/catalog` (web backend) — JSON summary of tools, resources, prompts.

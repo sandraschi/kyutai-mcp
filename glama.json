@@ -1,9 +1,14 @@
 {
   "name": "kyutai-mcp",
-  "version": "0.1.0",
-  "description": "FastMCP 3.1 server + SOTA webapp for Kyutai Moshi research and ops",
+  "version": "0.2.0",
+  "description": "FastMCP 3.4.2+ server + SOTA webapp for Kyutai Moshi research and ops: speech-to-speech, voice pipeline, persona proxy",
   "author": "sandraschi",
-  "tags": ["mcp", "fastmcp", "speech", "tts", "stt", "moshi", "kyutai"],
-  "homepage": "https://github.com/sandraschi/kyutai-mcp"
+  "tags": ["mcp", "fastmcp", "speech", "tts", "stt", "moshi", "kyutai", "voice"],
+  "homepage": "https://github.com/sandraschi/kyutai-mcp",
+  "features": {
+    "moshi_ops": {"tools": ["status", "local_viability", "references", "recommend_runtime"]},
+    "voice_pipeline": {"tools": ["turn", "speak_boilerplate", "service_status", "service_start", "service_stop", "session_history", "proxy_status", "proxy_start", "proxy_stop", "proxy_transcript"]},
+    "kyutai_backends": {"tools": ["status", "set_active", "pocket_tts_start", "pocket_tts_stop", "pocket_tts_synthesize", "unmute_probe"]}
+  }
 }
 

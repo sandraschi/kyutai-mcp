@@ -45,17 +45,20 @@ def session_history_impl(session_id: str | None = None) -> dict[str, Any]:
             }
         summary = []
         for sid, turns in _sessions.items():
-            summary.append({
-                "session_id": sid,
-                "turn_count": len(turns),
-                "last_activity_ms": turns[-1].get("timestamp_ms") if turns else None,
-            })
+            summary.append(
+                {
+                    "session_id": sid,
+                    "turn_count": len(turns),
+                    "last_activity_ms": turns[-1].get("timestamp_ms") if turns else None,
+                }
+            )
         return {"sessions": summary, "total": len(summary)}
 
 
 # ---------------------------------------------------------------------------
 # Glom-On provider helpers (self-contained, no webapp import)
 # ---------------------------------------------------------------------------
+
 
 def _ollama_base_url() -> str:
     raw = (os.environ.get("OLLAMA_HOST") or "127.0.0.1:11434").strip() or "127.0.0.1:11434"
@@ -155,6 +158,7 @@ async def _chat(provider: str, model: str, messages: list[dict[str, str]]) -> st
 # Intent helpers
 # ---------------------------------------------------------------------------
 
+
 def _infer_intent(utterance: str) -> str:
     t = utterance.lower()
     if "weather" in t:
@@ -174,7 +178,7 @@ def _extract_location(utterance: str) -> str | None:
     for marker in (" in ", " for ", " at "):
         idx = low.rfind(marker)
         if idx >= 0:
-            loc = text[idx + len(marker):].strip(" ?!.,")
+            loc = text[idx + len(marker) :].strip(" ?!.,")
             if loc:
                 return loc
     return None
@@ -183,6 +187,7 @@ def _extract_location(utterance: str) -> str | None:
 # ---------------------------------------------------------------------------
 # Data fetchers
 # ---------------------------------------------------------------------------
+
 
 async def _fetch_weather(location: str) -> dict[str, Any]:
     async with httpx.AsyncClient() as client:
@@ -200,7 +205,8 @@ async def _fetch_weather(location: str) -> dict[str, Any]:
         forecast = await client.get(
             "https://api.open-meteo.com/v1/forecast",
             params={
-                "latitude": lat, "longitude": lon,
+                "latitude": lat,
+                "longitude": lon,
                 "current": "temperature_2m,apparent_temperature,weather_code,wind_speed_10m",
                 "daily": "temperature_2m_max,temperature_2m_min",
                 "timezone": "auto",
@@ -251,15 +257,17 @@ async def _fetch_stocks(symbols: list[str]) -> list[dict[str, Any]]:
                 )
                 r.raise_for_status()
                 q = r.json()
-                results.append({
-                    "symbol": symbol,
-                    "price": q.get("c"),          # current price
-                    "change": q.get("d"),          # change
-                    "change_percent": q.get("dp"), # change percent
-                    "high": q.get("h"),
-                    "low": q.get("l"),
-                    "prev_close": q.get("pc"),
-                })
+                results.append(
+                    {
+                        "symbol": symbol,
+                        "price": q.get("c"),  # current price
+                        "change": q.get("d"),  # change
+                        "change_percent": q.get("dp"),  # change percent
+                        "high": q.get("h"),
+                        "low": q.get("l"),
+                        "prev_close": q.get("pc"),
+                    }
+                )
             except Exception as e:
                 results.append({"symbol": symbol, "error": str(e)})
     return results
@@ -325,20 +333,37 @@ async def speak_boilerplate_impl(
         raise ValueError(f"Unsupported topic: {topic}")
 
     import json as _json
-    system = SPEAK_BOILERPLATE_PROMPT + f"\nStyle: {style}\nEnd with one short line: 'Next update available on request.'"
+
+    system = (
+        SPEAK_BOILERPLATE_PROMPT + f"\nStyle: {style}\nEnd with one short line: 'Next update available on request.'"
+    )
     user = f"Topic: {topic}\nLocation: {location}\nRaw data JSON:\n{_json.dumps(gathered, ensure_ascii=False)}\nSources JSON:\n{_json.dumps(sources, ensure_ascii=False)}\n"
     text = await _chat(prov, mdl, [{"role": "system", "content": system}, {"role": "user", "content": user}])
 
-    return {
+    spoken = text.strip()
+    result: dict[str, Any] = {
         "topic": topic,
         "style": style,
-        "spoken_text": text.strip(),
+        "spoken_text": spoken,
         "research_data": gathered,
         "sources": sources,
         "provider": prov,
         "model": mdl,
         "workflow": ["collect_live_sources", "normalize_topic_data", "llm_synthesize_spoken_briefing"],
     }
+
+    try:
+        from kyutai_mcp.backends.manager import maybe_synthesize_briefing
+
+        tts = await maybe_synthesize_briefing(spoken)
+        if tts:
+            result["tts"] = tts
+            if not tts.get("skipped"):
+                result["workflow"].append("pocket_tts_synthesize")
+    except Exception:
+        pass
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -375,10 +400,16 @@ async def voice_turn_impl(
 
     # Quick ack
     try:
-        quick_ack = (await _chat(prov, mdl, [
-            {"role": "system", "content": VOICE_ACK_PROMPT},
-            {"role": "user", "content": f"Intent={intent}; User said: {utterance}"},
-        ])).strip()
+        quick_ack = (
+            await _chat(
+                prov,
+                mdl,
+                [
+                    {"role": "system", "content": VOICE_ACK_PROMPT},
+                    {"role": "user", "content": f"Intent={intent}; User said: {utterance}"},
+                ],
+            )
+        ).strip()
     except Exception:
         quick_ack = "Got it. Working on that now."
 
@@ -391,11 +422,14 @@ async def voice_turn_impl(
             "response": "Sure — which city should I use for the weather report?",
             "workflow_steps": ["quick_ack", "slot_check(location)", "clarification"],
         }
-        _append_turn(session_id, {
-            "timestamp_ms": int(time.time() * 1000),
-            "utterance": utterance,
-            **result,
-        })
+        _append_turn(
+            session_id,
+            {
+                "timestamp_ms": int(time.time() * 1000),
+                "utterance": utterance,
+                **result,
+            },
+        )
         return result
 
     # Info intents → agentic research
@@ -423,22 +457,31 @@ async def voice_turn_impl(
             "research_data": report["research_data"],
             "sources": report["sources"],
             "workflow_steps": [
-                "quick_ack", "intent_resolution", "agentic_research",
-                "deep_reasoner_synthesis", "tts_ready_output",
+                "quick_ack",
+                "intent_resolution",
+                "agentic_research",
+                "deep_reasoner_synthesis",
+                "tts_ready_output",
             ],
         }
         _append_turn(session_id, {"timestamp_ms": int(time.time() * 1000), "utterance": utterance, **result})
         return result
 
     # General turn
-    response = (await _chat(
-        dprov if use_deep_reasoner else prov,
-        dmdl if use_deep_reasoner else mdl,
-        [
-            {"role": "system", "content": VOICE_REASONER_PROMPT + "\nThis is a general turn, no external tool results are attached."},
-            {"role": "user", "content": f"User utterance: {utterance}"},
-        ],
-    )).strip()
+    response = (
+        await _chat(
+            dprov if use_deep_reasoner else prov,
+            dmdl if use_deep_reasoner else mdl,
+            [
+                {
+                    "role": "system",
+                    "content": VOICE_REASONER_PROMPT
+                    + "\nThis is a general turn, no external tool results are attached.",
+                },
+                {"role": "user", "content": f"User utterance: {utterance}"},
+            ],
+        )
+    ).strip()
 
     result = {
         "intent": "general",
@@ -472,7 +515,10 @@ _moshi_http_url: str = "http://127.0.0.1:8998"
 
 
 def configure_moshi_service(
-    command: str, args: list[str], cwd: str | None, http_url: str,
+    command: str,
+    args: list[str],
+    cwd: str | None,
+    http_url: str,
 ) -> None:
     """Called by webapp backend to keep service config in sync."""
     global _moshi_cmd, _moshi_args, _moshi_cwd, _moshi_http_url
@@ -613,9 +659,7 @@ async def proxy_status_impl() -> dict[str, Any]:
     http_ok: bool | None = None
     try:
         async with httpx.AsyncClient() as client:
-            r = await client.get(
-                f"http://{_proxy_host}:{_proxy_port}/health", timeout=1.5
-            )
+            r = await client.get(f"http://{_proxy_host}:{_proxy_port}/health", timeout=1.5)
             http_ok = r.status_code == 200
     except Exception:
         http_ok = False
@@ -629,8 +673,7 @@ async def proxy_status_impl() -> dict[str, Any]:
         "http_probe": http_ok,
         "upstream_moshi": _moshi_http_url,
         "usage": (
-            f"Connect to ws://{_proxy_host}:{_proxy_port}/api/chat "
-            f"(add ?persona=<system_prompt> for persona mode)"
+            f"Connect to ws://{_proxy_host}:{_proxy_port}/api/chat (add ?persona=<system_prompt> for persona mode)"
         ),
     }
 
@@ -697,9 +740,7 @@ async def proxy_transcript_impl(session_id: str | None = None) -> dict[str, Any]
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(3.0)) as client:
             if session_id:
-                r = await client.get(
-                    f"{base}/api/proxy/sessions/{session_id}/transcript"
-                )
+                r = await client.get(f"{base}/api/proxy/sessions/{session_id}/transcript")
                 r.raise_for_status()
                 return r.json()
             else:

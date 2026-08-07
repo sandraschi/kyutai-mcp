@@ -211,7 +211,7 @@ export function ToolsPage() {
           className={cn(
             "rounded-lg border px-3 py-2 text-sm",
             tab === "ops"
-              ? "border-amber-400/40 bg-amber-400/15 text-amber-100"
+              ? "border-amber-400/40 bg-amber-400/15 text-amber-200"
               : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
           )}
           onClick={() => setTab("ops")}
@@ -223,7 +223,7 @@ export function ToolsPage() {
           className={cn(
             "rounded-lg border px-3 py-2 text-sm",
             tab === "catalog"
-              ? "border-amber-400/40 bg-amber-400/15 text-amber-100"
+              ? "border-amber-400/40 bg-amber-400/15 text-amber-200"
               : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
           )}
           onClick={() => setTab("catalog")}
@@ -235,7 +235,7 @@ export function ToolsPage() {
           className={cn(
             "rounded-lg border px-3 py-2 text-sm",
             tab === "voice"
-              ? "border-amber-400/40 bg-amber-400/15 text-amber-100"
+              ? "border-amber-400/40 bg-amber-400/15 text-amber-200"
               : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
           )}
           onClick={() => setTab("voice")}
@@ -247,10 +247,10 @@ export function ToolsPage() {
       {tab === "ops" ? (
         <div className="grid gap-4 lg:grid-cols-3">
           <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
-            <div className="text-sm text-slate-400">Moshi ops (dashboard bridge)</div>
+            <div className="text-sm text-slate-300">Moshi ops (dashboard bridge)</div>
             <div className="mt-3 space-y-3">
               <div>
-                <div className="text-xs text-slate-500">Operation</div>
+                <div className="text-sm text-slate-400">Operation</div>
                 <select
                   className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm"
                   value={operation}
@@ -285,7 +285,7 @@ export function ToolsPage() {
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur lg:col-span-2">
-            <div className="text-sm text-slate-400">Result</div>
+            <div className="text-sm text-slate-300">Result</div>
             {error ? (
               <div className="mt-3 rounded-lg border border-rose-400/20 bg-rose-400/10 p-3 text-sm text-rose-200">
                 {error}
@@ -295,24 +295,24 @@ export function ToolsPage() {
                 {JSON.stringify(result, null, 2)}
               </pre>
             ) : (
-              <div className="mt-3 text-slate-500">Run an operation to see output.</div>
+              <div className="mt-3 text-slate-400">Run an operation to see output.</div>
             )}
           </div>
         </div>
       ) : tab === "voice" ? (
         <div className="space-y-4">
           <div className="rounded-2xl border border-amber-400/25 bg-amber-500/10 p-5 backdrop-blur">
-            <div className="text-sm font-medium text-amber-100">Real Moshi audio is not here</div>
+            <div className="text-sm font-medium text-amber-200">Real Moshi audio is not here</div>
             <p className="mt-2 text-sm text-slate-200">
               Kyutai Moshi full-duplex speech (mic → model → speaker) runs in the{" "}
               <strong className="text-slate-100">upstream Moshi browser UI</strong>, supervised from this dashboard.
-              The controls below call <span className="font-mono text-xs">/api/voice/*</span> and only produce{" "}
+              The controls below call <span className="font-mono text-sm">/api/voice/*</span> and only produce{" "}
               <strong className="text-slate-100">text</strong> via local Ollama/LM Studio (TTS-ready copy, no audio
               stream).
             </p>
             <div className="mt-3 flex flex-wrap gap-2 text-sm">
               <Link
-                className="rounded-lg border border-amber-400/40 bg-amber-400/15 px-3 py-2 text-amber-100 hover:bg-amber-400/25"
+                className="rounded-lg border border-amber-400/40 bg-amber-400/15 px-3 py-2 text-amber-200 hover:bg-amber-400/25"
                 to="/moshi"
               >
                 Open Talk with Moshi (audio)
@@ -327,24 +327,24 @@ export function ToolsPage() {
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
-            <div className="text-sm text-slate-400">LLM staging (API testbench)</div>
+            <div className="text-sm text-slate-300">LLM staging (API testbench)</div>
             <p className="mt-2 text-sm text-slate-300">
-              Exercise <span className="font-mono text-xs">/api/voice/turn</span> and{" "}
-              <span className="font-mono text-xs">/api/voice/speak_boilerplate</span> for scripted demos or automation.
+              Exercise <span className="font-mono text-sm">/api/voice/turn</span> and{" "}
+              <span className="font-mono text-sm">/api/voice/speak_boilerplate</span> for scripted demos or automation.
               Optional pairing with Moshi: use this text as a script, or run research separately—still not a substitute
               for Moshi&apos;s neural audio stack.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <button type="button" className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs hover:bg-white/10" onClick={() => usePreset("weather")}>
+              <button type="button" className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm hover:bg-white/10" onClick={() => usePreset("weather")}>
                 Weather preset
               </button>
-              <button type="button" className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs hover:bg-white/10" onClick={() => usePreset("world_news")}>
+              <button type="button" className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm hover:bg-white/10" onClick={() => usePreset("world_news")}>
                 World news preset
               </button>
-              <button type="button" className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs hover:bg-white/10" onClick={() => usePreset("stock_market")}>
+              <button type="button" className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm hover:bg-white/10" onClick={() => usePreset("stock_market")}>
                 Stock preset
               </button>
-              <button type="button" className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs hover:bg-white/10" onClick={() => usePreset("ai_news")}>
+              <button type="button" className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm hover:bg-white/10" onClick={() => usePreset("ai_news")}>
                 AI news preset
               </button>
             </div>
@@ -352,9 +352,9 @@ export function ToolsPage() {
 
           <div className="grid gap-4 lg:grid-cols-3">
             <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
-              <div className="text-sm text-slate-400">Request</div>
+              <div className="text-sm text-slate-300">Request</div>
               <div className="mt-3 space-y-3">
-                <label className="block text-xs text-slate-500">
+                <label className="block text-sm text-slate-400">
                   Mode
                   <select
                     className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm"
@@ -366,7 +366,7 @@ export function ToolsPage() {
                   </select>
                 </label>
 
-                <label className="block text-xs text-slate-500">
+                <label className="block text-sm text-slate-400">
                   Provider
                   <select
                     className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm"
@@ -389,7 +389,7 @@ export function ToolsPage() {
 
                 {voiceMode === "turn" ? (
                   <>
-                    <label className="block text-xs text-slate-500">
+                    <label className="block text-sm text-slate-400">
                       Session ID
                       <input
                         className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm"
@@ -397,7 +397,7 @@ export function ToolsPage() {
                         onChange={(e) => setVoiceSessionId(e.target.value)}
                       />
                     </label>
-                    <label className="block text-xs text-slate-500">
+                    <label className="block text-sm text-slate-400">
                       Utterance
                       <textarea
                         className="mt-1 h-28 w-full resize-none rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm"
@@ -408,7 +408,7 @@ export function ToolsPage() {
                   </>
                 ) : (
                   <>
-                    <label className="block text-xs text-slate-500">
+                    <label className="block text-sm text-slate-400">
                       Topic
                       <select
                         className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm"
@@ -421,7 +421,7 @@ export function ToolsPage() {
                         <option value="ai_news">ai_news</option>
                       </select>
                     </label>
-                    <label className="block text-xs text-slate-500">
+                    <label className="block text-sm text-slate-400">
                       Location
                       <input
                         className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm"
@@ -429,7 +429,7 @@ export function ToolsPage() {
                         onChange={(e) => setVoiceLocation(e.target.value)}
                       />
                     </label>
-                    <label className="block text-xs text-slate-500">
+                    <label className="block text-sm text-slate-400">
                       Symbols (comma-separated)
                       <input
                         className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm"
@@ -437,7 +437,7 @@ export function ToolsPage() {
                         onChange={(e) => setVoiceSymbols(e.target.value)}
                       />
                     </label>
-                    <label className="block text-xs text-slate-500">
+                    <label className="block text-sm text-slate-400">
                       Style
                       <select
                         className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm"
@@ -465,7 +465,7 @@ export function ToolsPage() {
 
             <div className="space-y-4 lg:col-span-2">
               <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
-                <div className="text-sm text-slate-400">Result</div>
+                <div className="text-sm text-slate-300">Result</div>
                 {voiceError ? (
                   <div className="mt-3 rounded-lg border border-rose-400/20 bg-rose-400/10 p-3 text-sm text-rose-200">
                     {voiceError}
@@ -475,18 +475,18 @@ export function ToolsPage() {
                     {JSON.stringify(voiceResult, null, 2)}
                   </pre>
                 ) : (
-                  <div className="mt-3 text-slate-500">Run a staged turn or boilerplate request.</div>
+                  <div className="mt-3 text-slate-400">Run a staged turn or boilerplate request.</div>
                 )}
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
-                <div className="text-sm text-slate-400">Workflow metadata</div>
+                <div className="text-sm text-slate-300">Workflow metadata</div>
                 {voiceWorkflow ? (
                   <pre className="mt-3 max-h-[280px] overflow-auto rounded-lg border border-white/10 bg-slate-950/30 p-3 text-xs text-slate-300">
                     {JSON.stringify(voiceWorkflow, null, 2)}
                   </pre>
                 ) : (
-                  <div className="mt-3 text-slate-500">Open this tab to load `/api/voice/workflows` metadata.</div>
+                  <div className="mt-3 text-slate-400">Open this tab to load `/api/voice/workflows` metadata.</div>
                 )}
               </div>
             </div>
@@ -495,7 +495,7 @@ export function ToolsPage() {
       ) : (
         <div className="space-y-4">
           {catalogLoading ? (
-            <div className="text-sm text-slate-500">Loading catalog…</div>
+            <div className="text-sm text-slate-400">Loading catalog…</div>
           ) : catalogErr ? (
             <div className="rounded-xl border border-rose-400/30 bg-rose-400/10 p-4 text-sm text-rose-200">
               {catalogErr}
@@ -503,7 +503,7 @@ export function ToolsPage() {
           ) : catalog ? (
             <>
               <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
-                <div className="text-sm text-slate-400">Server</div>
+                <div className="text-sm text-slate-300">Server</div>
                 <div className="mt-2 font-mono text-sm text-slate-200">
                   {catalog.server} {catalog.fastmcp ? `· ${catalog.fastmcp}` : ""}
                 </div>
@@ -516,14 +516,14 @@ export function ToolsPage() {
 
               <div className="grid gap-4 lg:grid-cols-2">
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
-                  <div className="text-sm text-slate-400">Tools</div>
+                  <div className="text-sm text-slate-300">Tools</div>
                   <ul className="mt-3 space-y-3">
                     {(catalog.tools ?? []).map((t) => (
                       <li key={t.name} className="rounded-lg border border-white/10 bg-slate-950/30 p-3 text-sm">
-                        <div className="font-mono text-amber-100">{t.name}</div>
-                        {t.summary ? <div className="mt-1 text-slate-400">{t.summary}</div> : null}
+                        <div className="font-mono text-amber-200">{t.name}</div>
+                        {t.summary ? <div className="mt-1 text-slate-300">{t.summary}</div> : null}
                         {t.parameters != null ? (
-                          <pre className="mt-2 overflow-auto text-xs text-slate-500">
+                          <pre className="mt-2 overflow-auto text-xs text-slate-400">
                             {JSON.stringify(t.parameters, null, 2)}
                           </pre>
                         ) : null}
@@ -534,13 +534,13 @@ export function ToolsPage() {
 
                 <div className="space-y-4">
                   <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
-                    <div className="text-sm text-slate-400">Resources</div>
+                    <div className="text-sm text-slate-300">Resources</div>
                     <pre className="mt-3 overflow-auto text-xs text-slate-300">
                       {JSON.stringify(catalog.resources ?? [], null, 2)}
                     </pre>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
-                    <div className="text-sm text-slate-400">Prompts</div>
+                    <div className="text-sm text-slate-300">Prompts</div>
                     <pre className="mt-3 overflow-auto text-xs text-slate-300">
                       {JSON.stringify(catalog.prompts ?? [], null, 2)}
                     </pre>

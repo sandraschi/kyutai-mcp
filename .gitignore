@@ -25,4 +25,6 @@ webapp/frontend/.vite/
 *.log
 
 
+*.mcpb
+mcpb-build/
 _dashboard/

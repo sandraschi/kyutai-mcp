@@ -2,6 +2,38 @@
 
 All notable changes to **kyutai-mcp** will be documented in this file.
 
+## [Unreleased] — 2026-07-13
+
+### Added
+- Tool annotations: `READ_ONLY` for `moshi_ops`, `kyutai_backends`
+- Docstring SOTA: `## Return Format`, `## Examples` on all 3 tools; removed `Args:` blocks
+- Skills: `skills/kyutai-mcp/SKILL.md` with workflow guide + `SkillsDirectoryProvider` registration
+- Dependencies: `framer-motion`, `zustand`, `@tauri-apps/api` added to webapp
+- `.gitignore`: added `*.mcpb`, `mcpb-build/`
+- Self-termination: `kyutai_shutdown` MCP tool + `/api/shutdown` in webapp backend + MCP HTTP
+- `useZoom()` hook: Ctrl+Scroll through {0.5, 0.6, 0.7, 0.8, 1.0, 1.25, 1.5, 2.0, 3.0}, Ctrl+0 reset, CSS fallback, localStorage, zoom % indicator
+- Backend-status listener: Tauri event + HTTP polling in AppShell
+- Chat localStorage persistence (100-msg cap), data-testid attributes, Clear button
+- Type declarations for `@tauri-apps/api`
+- Font size/contrast audit: `text-xs`→`text-sm`, `text-slate-400`→`text-slate-300`, `text-slate-500`→`text-slate-400`, `text-amber-100`→`text-amber-200` across all 12 page files
+
+### Fixed
+- Ruff: import sorting in `server.py`
+
+### Fixed
+- Security: CORS `allow_origins=["*"]` in webapp backend → fleet standard with explicit origins + unconditional Tailscale/LAN/Tauri regex
+- Security: CORS added to `mcp_http.py` (was missing entirely, MCP HTTP had no CORS middleware)
+- Security: `build.ps1` now bundles `.env.example` instead of `.env` (was leaking dev API keys)
+- Security: `tauri.conf.json` resources updated to `.env.example`
+- Tauri: `backend.rs` `BACKEND_PORT` fixed from `10700` (wrong) to `10926` (MCP HTTP port)
+- Tauri: `backend.rs` `free_port()` upgraded with image-name kill, UAC escalation, 240s poll loop
+- Metadata: `glama.json` version synced to `0.2.0`, tools listed
+- Version: `__init__.py` synced to match `pyproject.toml` (0.2.0)
+
+### Added
+- `.env.example` created (was missing entirely)
+- `.cursorrules` for session context injection (Moshi voice ops)
+
 ## [0.2.1] — 2026-04-19
 
 ### Fixed

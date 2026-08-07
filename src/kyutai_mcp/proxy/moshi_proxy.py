@@ -30,9 +30,9 @@ import asyncio
 import logging
 import os
 import time
-
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from typing import Any, Callable, Coroutine
+from typing import Any
 
 import aiohttp
 from aiohttp import web
@@ -51,6 +51,7 @@ PROXY_PORT = int(os.environ.get("MOSHI_PROXY_PORT", "8999"))
 # ---------------------------------------------------------------------------
 # Session transcript
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class ProxySession:
@@ -76,11 +77,13 @@ class ProxySession:
             segment = self._pending_text.strip()
             self._pending_text = ""
             if segment:
-                self.transcript_segments.append({
-                    "speaker": "moshi",
-                    "text": segment,
-                    "timestamp": time.time(),
-                })
+                self.transcript_segments.append(
+                    {
+                        "speaker": "moshi",
+                        "text": segment,
+                        "timestamp": time.time(),
+                    }
+                )
                 return segment
         return None
 
@@ -88,12 +91,14 @@ class ProxySession:
         """Return full transcript with any pending text flushed."""
         result = list(self.transcript_segments)
         if self._pending_text.strip():
-            result.append({
-                "speaker": "moshi",
-                "text": self._pending_text.strip(),
-                "timestamp": time.time(),
-                "partial": True,
-            })
+            result.append(
+                {
+                    "speaker": "moshi",
+                    "text": self._pending_text.strip(),
+                    "timestamp": time.time(),
+                    "partial": True,
+                }
+            )
         return result
 
 
@@ -118,9 +123,7 @@ def _next_session_id() -> str:
 PersonaCallback = Callable[[str, ProxySession], Coroutine[Any, Any, str | None]]
 
 
-async def _default_persona_callback(
-    moshi_segment: str, session: ProxySession
-) -> str | None:
+async def _default_persona_callback(moshi_segment: str, session: ProxySession) -> str | None:
     """Default: no persona augmentation, just log."""
     logger.debug("Moshi said: %s", moshi_segment)
     return None
@@ -143,6 +146,7 @@ def set_persona_callback(cb: PersonaCallback) -> None:
 # ---------------------------------------------------------------------------
 # WebSocket proxy handler
 # ---------------------------------------------------------------------------
+
 
 async def _relay_client_to_moshi(
     client_ws: web.WebSocketResponse,
@@ -197,11 +201,13 @@ async def _relay_moshi_to_client(
                                 # Inject persona text annotation back to client
                                 annotation = b"\x02" + augmented.encode("utf-8")
                                 await client_ws.send_bytes(annotation)
-                                session.transcript_segments.append({
-                                    "speaker": "persona",
-                                    "text": augmented,
-                                    "timestamp": time.time(),
-                                })
+                                session.transcript_segments.append(
+                                    {
+                                        "speaker": "persona",
+                                        "text": augmented,
+                                        "timestamp": time.time(),
+                                    }
+                                )
                         except Exception as exc:
                             logger.warning("Persona callback failed: %s", exc)
 
@@ -277,17 +283,20 @@ async def handle_proxy_chat(request: web.Request) -> web.WebSocketResponse:
 # REST endpoints for proxy management
 # ---------------------------------------------------------------------------
 
+
 async def handle_proxy_sessions(request: web.Request) -> web.Response:
     """GET /api/proxy/sessions — list proxy sessions."""
     sessions_list = []
     for sid, s in _sessions.items():
-        sessions_list.append({
-            "session_id": sid,
-            "started_at": s.started_at,
-            "persona_enabled": s.persona_enabled,
-            "transcript_segments": len(s.transcript_segments),
-            "text_tokens": len(s.moshi_text_buffer),
-        })
+        sessions_list.append(
+            {
+                "session_id": sid,
+                "started_at": s.started_at,
+                "persona_enabled": s.persona_enabled,
+                "transcript_segments": len(s.transcript_segments),
+                "text_tokens": len(s.moshi_text_buffer),
+            }
+        )
     return web.json_response({"sessions": sessions_list, "total": len(sessions_list)})
 
 
@@ -298,16 +307,19 @@ async def handle_proxy_transcript(request: web.Request) -> web.Response:
     if not session:
         return web.json_response({"error": f"Session not found: {sid}"}, status=404)
 
-    return web.json_response({
-        "session_id": sid,
-        "transcript": session.get_transcript(),
-        "raw_text": "".join(session.moshi_text_buffer),
-    })
+    return web.json_response(
+        {
+            "session_id": sid,
+            "transcript": session.get_transcript(),
+            "raw_text": "".join(session.moshi_text_buffer),
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
 # App factory
 # ---------------------------------------------------------------------------
+
 
 def create_proxy_app(
     persona_callback: PersonaCallback | None = None,
@@ -328,12 +340,14 @@ def create_proxy_app(
 
     # Health endpoint
     async def health(_: web.Request) -> web.Response:
-        return web.json_response({
-            "ok": True,
-            "service": "moshi-proxy",
-            "upstream": MOSHI_WS_URL,
-            "active_sessions": len(_sessions),
-        })
+        return web.json_response(
+            {
+                "ok": True,
+                "service": "moshi-proxy",
+                "upstream": MOSHI_WS_URL,
+                "active_sessions": len(_sessions),
+            }
+        )
 
     app.router.add_get("/health", health)
 

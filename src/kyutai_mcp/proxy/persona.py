@@ -89,9 +89,7 @@ _last_persona_call = 0.0
 _MIN_INTERVAL_SECONDS = 5.0
 
 
-async def persona_reasoner(
-    moshi_segment: str, session: Any
-) -> str | None:
+async def persona_reasoner(moshi_segment: str, session: Any) -> str | None:
     """Process a Moshi text segment through the persona-aware LLM.
 
     Returns augmented text to inject, or None to skip.
@@ -152,13 +150,7 @@ async def persona_reasoner(
                     },
                 )
                 r.raise_for_status()
-                reply = (
-                    r.json()
-                    .get("choices", [{}])[0]
-                    .get("message", {})
-                    .get("content", "")
-                    .strip()
-                )
+                reply = r.json().get("choices", [{}])[0].get("message", {}).get("content", "").strip()
 
         # If LLM says SKIP, don't inject
         if not reply or reply.upper() == "SKIP":

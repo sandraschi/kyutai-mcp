@@ -24,7 +24,9 @@ import {
 type HealthStatus = { ok: boolean };
 type MoshiStatus = {
   running: boolean;
-  http_probe?: { ok: boolean | null };
+  online?: boolean;
+  http_probe?: { ok: boolean | null; detail?: string };
+  validation?: { issues?: string[]; recommendations?: string[]; ready_to_start?: boolean };
 };
 type GlomStatus = {
   healthy_any: boolean;
@@ -60,9 +62,9 @@ function StatusChip({
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all ${
+      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-all ${
         loading
-          ? "bg-slate-800 text-slate-400"
+          ? "bg-slate-800 text-slate-300"
           : ok
             ? "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
             : "bg-rose-500/10 text-rose-300 border border-rose-500/20"
@@ -112,7 +114,7 @@ function FeatureCardComponent({ card }: { card: FeatureCard }) {
       <h3 className="mt-3 text-sm font-semibold text-slate-100">
         {card.title}
       </h3>
-      <p className="mt-1.5 text-xs leading-relaxed text-slate-400">
+      <p className="mt-1.5 text-sm leading-relaxed text-slate-300">
         {card.description}
       </p>
     </Link>
@@ -165,6 +167,10 @@ export function HomePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    void fetch("/api/moshi/service/ensure?wait_seconds=0", { method: "POST" });
+  }, []);
+
+  useEffect(() => {
     const run = async () => {
       try {
         const [hRes, mRes, gRes] = await Promise.allSettled([
@@ -188,7 +194,8 @@ export function HomePage() {
     return () => clearInterval(interval);
   }, []);
 
-  const moshiOnline = moshi?.running && moshi?.http_probe?.ok;
+  const moshiOnline = moshi?.online ?? (moshi?.running && moshi?.http_probe?.ok);
+  const moshiStarting = moshi?.running && !moshiOnline;
   const glomOnline = glom?.healthy_any;
 
   const FEATURES: FeatureCard[] = [
@@ -284,7 +291,7 @@ export function HomePage() {
               <Radio className="h-8 w-8 text-violet-400" />
             </div>
             <div>
-              <div className="text-xs uppercase tracking-[0.25em] text-violet-300/80 font-medium">
+              <div className="text-sm uppercase tracking-[0.25em] text-violet-300/80 font-medium">
                 Voice AI Platform
               </div>
               <h1 className="text-2xl font-bold tracking-tight md:text-3xl lg:text-4xl">
@@ -332,10 +339,41 @@ export function HomePage() {
         </div>
       </section>
 
+      {!moshiOnline && !loading ? (
+        <section className="rounded-2xl border border-amber-400/25 bg-amber-400/10 px-5 py-4 text-sm text-amber-200">
+          <div className="font-medium">
+            {moshiStarting
+              ? "Moshi is starting — first launch downloads multi-GB weights (can take several minutes)."
+              : "Moshi is not ready — voice features need the upstream speech server on port 8998."}
+          </div>
+          {moshi?.validation?.issues?.length ? (
+            <ul className="mt-2 list-disc pl-5 text-amber-200/90">
+              {moshi.validation.issues.map((issue) => (
+                <li key={issue}>{issue}</li>
+              ))}
+            </ul>
+          ) : null}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link
+              to="/actions"
+              className="rounded-lg border border-amber-300/30 bg-amber-300/10 px-3 py-1.5 text-sm hover:bg-amber-300/20"
+            >
+              Start Moshi
+            </Link>
+            <Link
+              to="/status"
+              className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-slate-200 hover:bg-white/5"
+            >
+              View logs
+            </Link>
+          </div>
+        </section>
+      ) : null}
+
       {/* ── Live status bar ── */}
       <section className="animate-fade-in-up animate-delay-100">
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-3 backdrop-blur">
-          <span className="mr-2 text-xs font-medium uppercase tracking-wider text-slate-500">
+          <span className="mr-2 text-sm font-medium uppercase tracking-wider text-slate-400">
             System
           </span>
           <StatusChip label="Backend" ok={backendOk} loading={loading} />
@@ -352,7 +390,7 @@ export function HomePage() {
           <div className="hidden sm:flex flex-1" />
           <Link
             to="/status"
-            className="text-xs text-slate-500 hover:text-slate-300 transition"
+            className="text-sm text-slate-400 hover:text-slate-300 transition"
           >
             Full status →
           </Link>
@@ -361,7 +399,7 @@ export function HomePage() {
 
       {/* ── Quick workflows ── */}
       <section className="animate-fade-in-up animate-delay-200">
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-slate-500">
+        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-slate-400">
           Quick Workflows
         </h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -377,10 +415,10 @@ export function HomePage() {
                 <h3 className="text-sm font-semibold text-white">
                   {wf.title}
                 </h3>
-                <p className="mt-1.5 text-xs text-slate-400 leading-relaxed">
+                <p className="mt-1.5 text-sm text-slate-300 leading-relaxed">
                   {wf.body}
                 </p>
-                <span className="mt-3 inline-block text-xs font-medium text-violet-300 group-hover:text-violet-200 transition">
+                <span className="mt-3 inline-block text-sm font-medium text-violet-300 group-hover:text-violet-200 transition">
                   {wf.action}
                 </span>
               </Link>
@@ -391,7 +429,7 @@ export function HomePage() {
 
       {/* ── Feature grid ── */}
       <section className="animate-fade-in-up animate-delay-300">
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-slate-500">
+        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-slate-400">
           All Features
         </h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
@@ -404,7 +442,7 @@ export function HomePage() {
       {/* ── How it works ── */}
       <section className="animate-fade-in-up animate-delay-400">
         <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-6 md:p-8">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-5">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-5">
             How the Voice Pipeline Works
           </h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -436,14 +474,14 @@ export function HomePage() {
               },
             ].map((s) => (
               <div key={s.step} className="flex gap-3">
-                <div className="flex-shrink-0 h-7 w-7 rounded-full bg-violet-500/15 flex items-center justify-center text-xs font-bold text-violet-300">
+                <div className="flex-shrink-0 h-7 w-7 rounded-full bg-violet-500/15 flex items-center justify-center text-sm font-bold text-violet-300">
                   {s.step}
                 </div>
                 <div>
                   <h4 className="text-sm font-medium text-slate-200">
                     {s.title}
                   </h4>
-                  <p className="mt-0.5 text-xs text-slate-400 leading-relaxed">
+                  <p className="mt-0.5 text-sm text-slate-300 leading-relaxed">
                     {s.desc}
                   </p>
                 </div>
@@ -455,7 +493,7 @@ export function HomePage() {
 
       {/* ── Footer info ── */}
       <footer className="animate-fade-in animate-delay-500 pb-4">
-        <div className="flex flex-wrap items-center justify-between gap-4 text-xs text-slate-600">
+        <div className="flex flex-wrap items-center justify-between gap-4 text-sm text-slate-600">
           <div className="flex items-center gap-3">
             <span>kyutai-mcp v0.2.0</span>
             <span>·</span>
@@ -464,13 +502,13 @@ export function HomePage() {
             <span>Ports 10924 / 10925 / 10926</span>
           </div>
           <div className="flex items-center gap-3">
-            <Link to="/help" className="hover:text-slate-400 transition">Help & Docs</Link>
+            <Link to="/help" className="hover:text-slate-300 transition">Help & Docs</Link>
             <span>·</span>
             <a
               href="https://github.com/kyutai-labs/moshi"
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-slate-400 transition"
+              className="hover:text-slate-300 transition"
             >
               Moshi on GitHub
             </a>

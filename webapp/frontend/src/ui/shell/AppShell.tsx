@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   Activity,
@@ -18,6 +18,85 @@ import { useLogs } from "../log/LogContext";
 import { cn } from "../cn";
 import { LoggerPanel } from "./LoggerPanel";
 import { ChatModal } from "./ChatModal";
+
+const ZOOM_LEVELS = [0.5, 0.6, 0.7, 0.8, 1.0, 1.25, 1.5, 2.0, 3.0];
+
+function useZoom() {
+  const [zoomIndex, setZoomIndex] = useState(() => {
+    try { const saved = localStorage.getItem("tauri-zoom"); return saved ? ZOOM_LEVELS.indexOf(parseFloat(saved)) : 0; } catch { return 0; }
+  });
+  const currentZoom = ZOOM_LEVELS[zoomIndex];
+
+  const applyZoom = useCallback(async (level: number) => {
+    localStorage.setItem("tauri-zoom", String(level));
+    try {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      await getCurrentWindow().setZoom(level);
+      return;
+    } catch { /* dev browser — fall through to CSS zoom */ }
+    document.documentElement.style.zoom = String(level);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: WheelEvent) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      setZoomIndex(prev => {
+        const next = e.deltaY < 0 ? Math.min(prev + 1, ZOOM_LEVELS.length - 1) : Math.max(prev - 1, 0);
+        if (next !== prev) applyZoom(ZOOM_LEVELS[next]);
+        return next;
+      });
+    };
+    const keyHandler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "0") {
+        e.preventDefault();
+        const idx = ZOOM_LEVELS.indexOf(1.0);
+        if (idx >= 0) { setZoomIndex(idx); applyZoom(1.0); }
+      }
+    };
+    window.addEventListener("wheel", handler, { passive: false });
+    window.addEventListener("keydown", keyHandler);
+    const saved = localStorage.getItem("tauri-zoom");
+    if (saved) applyZoom(parseFloat(saved));
+    return () => { window.removeEventListener("wheel", handler); window.removeEventListener("keydown", keyHandler); };
+  }, [applyZoom]);
+
+  return currentZoom;
+}
+
+function useBackendStatus() {
+  const [status, setStatus] = useState<"connecting" | "connected" | "offline">("connecting");
+
+  const check = useCallback(async () => {
+    try {
+      const r = await fetch("/api/health");
+      if (r.ok) { setStatus("connected"); return; }
+    } catch { /* retry */ }
+    setStatus("offline");
+  }, []);
+
+  useEffect(() => {
+    check();
+    const interval = setInterval(check, 10000);
+    return () => clearInterval(interval);
+  }, [check]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    (async () => {
+      try {
+        const { listen } = await import("@tauri-apps/api/event");
+        unlisten = await listen<string>("backend-status", (event) => {
+          if (event.payload === "ready") check();
+          else if (typeof event.payload === "string" && event.payload.startsWith("error:")) setStatus("offline");
+        });
+      } catch { /* not in Tauri */ }
+    })();
+    return () => { if (unlisten) unlisten(); };
+  }, [check]);
+
+  return status;
+}
 
 type NavItem = {
   to: string;
@@ -63,6 +142,8 @@ function loadSidebarCollapsed(): boolean {
 }
 
 export function AppShell(props: { children: React.ReactNode }) {
+  const currentZoom = useZoom();
+  const backendStatus = useBackendStatus();
   const location = useLocation();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(loadSidebarCollapsed);
   const { logs, append, clear } = useLogs();
@@ -106,8 +187,13 @@ export function AppShell(props: { children: React.ReactNode }) {
           )}
         >
           <div className="flex items-center justify-between px-4 py-4">
-            <div className={cn("font-semibold tracking-wide", sidebarCollapsed && "sr-only")}>
-              kyutai-mcp
+            <div className={cn("flex items-center gap-2", sidebarCollapsed && "sr-only")}>
+              <span className="font-semibold tracking-wide">kyutai-mcp</span>
+              {currentZoom !== 1.0 && (
+                <span className="rounded bg-amber-400/20 px-1.5 py-0.5 text-xs text-amber-200" title="Ctrl+0 to reset zoom">
+                  {Math.round(currentZoom * 100)}%
+                </span>
+              )}
             </div>
             <button
               className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs hover:bg-white/10"

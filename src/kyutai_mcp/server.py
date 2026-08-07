@@ -5,10 +5,11 @@ import platform
 import time
 from typing import Any, Literal
 
-from fastapi import FastAPI
 from fastmcp import FastMCP
 
-from kyutai_mcp.config import DEFAULT_CONFIG
+_READ_ONLY = {"readonly": True}
+_MUTATING = {}
+_DESTRUCTIVE = {}
 
 mcp = FastMCP("kyutai-mcp")
 
@@ -17,7 +18,7 @@ mcp = FastMCP("kyutai-mcp")
 async def about_resource() -> str:
     return (
         "kyutai-mcp — Fleet-standard MCP server for Kyutai Moshi ops and voice pipeline.\n"
-        "Tools: moshi_ops (hardware/runtime advisory), voice_pipeline (voice turns, briefings, service control, persona proxy).\n"
+        "Tools: moshi_ops, voice_pipeline, kyutai_backends (Moshi / Pocket TTS / Unmute).\n"
     )
 
 
@@ -61,7 +62,7 @@ async def prompt_pipeline_guide() -> str:
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_ONLY)
 async def moshi_ops(
     operation: Literal[
         "status",
@@ -77,12 +78,13 @@ async def moshi_ops(
     Moshi workflows span status, local hardware viability, and runtime recommendations.
     A unified tool avoids fragmentation and keeps the webapp + ToolBench stable.
 
-    Args:
-        operation: The sub-operation to run.
-        include_env: Include selected environment diagnostics (safe subset).
+    ## Return Format
+    {"success": bool, "result": dict, "execution_time_ms": int, "recommendations": [str]}
 
-    Returns:
-        dict with success/result plus recommendations and related operations.
+    ## Examples
+    moshi_ops(operation="status")
+    moshi_ops(operation="local_viability", include_env=True)
+    moshi_ops(operation="references")
     """
 
     t0 = time.time()
@@ -146,22 +148,14 @@ async def voice_pipeline(
     control, session history, and persona-aware proxy management. A unified
     tool keeps the MCP surface stable and lets agents chain operations naturally.
 
-    Args:
-        operation: The sub-operation to run.
-        utterance: User utterance text (required for 'turn').
-        session_id: Session identifier for turn tracking / proxy transcript lookup.
-        provider: LLM provider — 'auto', 'ollama', or 'lmstudio'.
-        model: Specific model name, or None for auto-select.
-        use_deep_reasoner: Use deeper model for final synthesis.
-        deep_provider: Provider for deep reasoner — 'same', 'ollama', 'lmstudio'.
-        deep_model: Specific model for deep reasoner, or None.
-        location_hint: Override location for weather queries.
-        topic: Topic for speak_boilerplate — 'weather', 'world_news', 'ai_news', 'stock_market'.
-        symbols: Stock symbols for stock_market topic.
-        style: Briefing style — 'brief', 'normal', 'detailed'.
+    ## Return Format
+    {"success": bool, "result": dict, "execution_time_ms": int}
 
-    Returns:
-        dict with operation results, workflow steps, and related operations.
+    ## Examples
+    voice_pipeline(operation="service_status")
+    voice_pipeline(operation="turn", utterance="Hello")
+    voice_pipeline(operation="speak_boilerplate", topic="weather")
+    voice_pipeline(operation="proxy_status")
     """
     from kyutai_mcp.tools.voice_pipeline import (
         moshi_service_start_impl,
@@ -215,9 +209,7 @@ async def voice_pipeline(
         elif operation == "proxy_stop":
             result = proxy_stop_impl()
         elif operation == "proxy_transcript":
-            result = await proxy_transcript_impl(
-                session_id=session_id if session_id != "default" else None
-            )
+            result = await proxy_transcript_impl(session_id=session_id if session_id != "default" else None)
         else:
             raise ValueError(f"Unknown operation: {operation}")
 
@@ -226,9 +218,16 @@ async def voice_pipeline(
             "result": result,
             "execution_time_ms": int((time.time() - t0) * 1000),
             "related_operations": [
-                "turn", "speak_boilerplate", "service_status",
-                "service_start", "service_stop", "session_history",
-                "proxy_status", "proxy_start", "proxy_stop", "proxy_transcript",
+                "turn",
+                "speak_boilerplate",
+                "service_status",
+                "service_start",
+                "service_stop",
+                "session_history",
+                "proxy_status",
+                "proxy_start",
+                "proxy_stop",
+                "proxy_transcript",
             ],
         }
     except Exception as e:
@@ -255,7 +254,7 @@ async def moshi_ops_impl(
             "fastmcp": "3.1+",
             "python": platform.python_version(),
             "os": platform.platform(),
-            "tools": ["moshi_ops", "voice_pipeline"],
+            "tools": ["moshi_ops", "voice_pipeline", "kyutai_backends"],
             "recommendations": ["Use the webapp for interactive inspection (webapp/start.ps1)."],
         }
 
@@ -289,7 +288,7 @@ async def moshi_ops_impl(
         if include_env:
             for k in ["CUDA_VISIBLE_DEVICES", "HF_HOME", "HUGGINGFACE_HUB_TOKEN"]:
                 if k in os.environ:
-                    env[k] = ("[REDACTED]" if "TOKEN" in k else os.environ[k])
+                    env[k] = "[REDACTED]" if "TOKEN" in k else os.environ[k]
 
         recs = []
         if gpu.get("vram_total_mb") is not None and gpu["vram_total_mb"] >= 20000:
@@ -310,29 +309,134 @@ async def moshi_ops_impl(
     raise ValueError(f"Unknown operation: {operation}")
 
 
-def build_http_app() -> FastAPI:
-    app = FastAPI(title="kyutai-mcp", version="0.2.0")
+@mcp.tool(annotations=_READ_ONLY)
+async def kyutai_backends(
+    operation: Literal[
+        "status",
+        "set_active",
+        "pocket_tts_start",
+        "pocket_tts_stop",
+        "pocket_tts_synthesize",
+        "unmute_probe",
+    ],
+    active_backend: Literal["moshi", "pocket_tts", "unmute"] = "moshi",
+    text: str = "",
+    voice: str | None = None,
+) -> dict[str, Any]:
+    """kyutai_backends — Kyutai voice backend selector (portmanteau).
 
-    @app.get("/health")
-    async def health() -> dict[str, Any]:
-        return {"ok": True, "service": "kyutai-mcp", "tools": ["moshi_ops", "voice_pipeline"]}
+    Manages Moshi (GPU duplex), Pocket TTS (CPU TTS), and Unmute (WSL/Docker probe).
 
-    return app
+    ## Return Format
+    {"success": bool, "result": dict, "execution_time_ms": int}
+
+    ## Examples
+    kyutai_backends(operation="status")
+    kyutai_backends(operation="set_active", active_backend="pocket_tts")
+    kyutai_backends(operation="pocket_tts_synthesize", text="Hello")
+    """
+    from kyutai_mcp.backends.manager import (
+        backends_status,
+        get_backends_config,
+        pocket_tts_start,
+        pocket_tts_stop,
+        set_active_voice_backend,
+    )
+    from kyutai_mcp.backends.pocket_tts import pocket_tts_synthesize
+    from kyutai_mcp.backends.unmute import unmute_status
+    from kyutai_mcp.tools.voice_pipeline import moshi_service_status_impl
+
+    t0 = time.time()
+    try:
+        if operation == "status":
+            moshi = await moshi_service_status_impl()
+            result = await backends_status(include_moshi=moshi)
+        elif operation == "set_active":
+            result = set_active_voice_backend(active_backend)
+        elif operation == "pocket_tts_start":
+            cfg = get_backends_config().get("pocket_tts", {})
+            result = pocket_tts_start(cfg)
+        elif operation == "pocket_tts_stop":
+            result = pocket_tts_stop()
+        elif operation == "pocket_tts_synthesize":
+            if not text.strip():
+                raise ValueError("text is required for pocket_tts_synthesize.")
+            cfg = get_backends_config().get("pocket_tts", {})
+            result = await pocket_tts_synthesize(text, cfg, voice=voice)
+        elif operation == "unmute_probe":
+            cfg = get_backends_config().get("unmute", {})
+            result = await unmute_status(cfg)
+        else:
+            raise ValueError(f"Unknown operation: {operation}")
+
+        return {
+            "success": True,
+            "result": result,
+            "execution_time_ms": int((time.time() - t0) * 1000),
+            "related_operations": [
+                "status",
+                "set_active",
+                "pocket_tts_start",
+                "pocket_tts_stop",
+                "pocket_tts_synthesize",
+                "unmute_probe",
+            ],
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "recovery_options": [
+                "Run operation='status' for full backend health",
+                "Install Pocket TTS: uv sync --group pocket-tts",
+                "For Unmute on Windows use WSL2 — see docs/KYUTAI_BACKENDS.md",
+            ],
+            "diagnostic_info": {"platform": platform.platform()},
+        }
+
+
+# Register skills provider
+try:
+    from pathlib import Path
+
+    from fastmcp.server.providers.skills import SkillsDirectoryProvider
+
+    _skills_root = Path(__file__).resolve().parent / "skills"
+    if _skills_root.is_dir():
+        mcp.add_provider(SkillsDirectoryProvider(roots=_skills_root))
+except ImportError:
+    import logging
+
+    logging.getLogger(__name__).warning("SkillsDirectoryProvider not available")
+
+
+@mcp.tool(annotations=_DESTRUCTIVE)
+async def kyutai_shutdown(reason: str = "user request") -> dict[str, Any]:
+    """KYUTAI_SHUTDOWN — Graceful self-termination of the MCP server.
+
+    Saves state, writes final logs, and stops the event loop.
+    Use instead of brutal zombie kill for orderly database close and final logs.
+
+    ## Return Format
+    {"success": true, "message": "Server shutting down: <reason>"}
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+    logger.warning("Server shutting down via kyutai_shutdown: %s", reason)
+    # Schedule shutdown after the response is sent
+    import asyncio
+    import os
+
+    async def _delayed_shutdown():
+        await asyncio.sleep(1)
+        os._exit(0)
+
+    asyncio.create_task(_delayed_shutdown())
+    return {"success": True, "message": f"Server shutting down: {reason}"}
 
 
 def run() -> None:
-    mcp_http_host = DEFAULT_CONFIG.mcp_http_host
-    mcp_http_port = DEFAULT_CONFIG.mcp_http_port
-
-    # Dual transport:
-    # - STDIO for IDE integration
-    # - HTTP (streamable) for the webapp backend bridge
-    http_app = build_http_app()
-    mcp.run(
-        transport="stdio",
-        http_app=http_app,
-        http_host=mcp_http_host,
-        http_port=mcp_http_port,
-        http_path="/mcp",
-    )
-
+    """Stdio transport for IDE MCP clients (Claude Desktop, Cursor, etc.)."""
+    mcp.run(transport="stdio")

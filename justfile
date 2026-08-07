@@ -1,15 +1,16 @@
-﻿set windows-shell := ["pwsh.exe", "-NoLogo", "-Command"]
+set windows-shell := ["powershell.exe", "-NoProfile", "-Command"]
+import 'scripts/just/fleet.just'
 
 REPO := justfile_directory()
 UV := env_var_or_default("UV_EXE", "uv")
 
-# ── Dashboard ─────────────────────────────────────────────────────────────────
+# --- Dashboard ---
 
 # Open the interactive recipe dashboard in the browser
 default:
     @just --list
 
-# ── Install ───────────────────────────────────────────────────────────────────
+# --- Install ---
 
 # Install Python + frontend dependencies
 install bootstrap:
@@ -17,7 +18,7 @@ install bootstrap:
     Set-Location "{{REPO}}\webapp\frontend"
     npm install
 
-# ── Operation ─────────────────────────────────────────────────────────────────
+# --- Operation ---
 
 # Start full stack (canonical: webapp/start.ps1)
 start dev web:
@@ -43,9 +44,9 @@ download-moshi:
 
 # Install Pocket TTS optional backend (CPU TTS on :10929)
 bootstrap-pocket-tts:
-    pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File "{{REPO}}\tools\bootstrap_pocket_tts.ps1"
+    powershell.exe -NoProfile -NoProfile -ExecutionPolicy Bypass -File "{{REPO}}\tools\bootstrap_pocket_tts.ps1"
 
-# ── Quality ───────────────────────────────────────────────────────────────────
+# --- Quality ---
 
 # Quick import smoke test
 check:
@@ -69,9 +70,9 @@ test:
     & "{{UV}}" run pytest -q
 
 e2e:
-    pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File "D:\Dev\repos\mcp-central-docs\scripts\playwright-audit.ps1" -RepoPath "{{REPO}}"
+    powershell.exe -NoProfile -NoProfile -ExecutionPolicy Bypass -File "D:\Dev\repos\mcp-central-docs\scripts\playwright-audit.ps1" -RepoPath "{{REPO}}"
 
-# ── Hardening ─────────────────────────────────────────────────────────────────
+# --- Hardening ---
 
 # Execute Bandit security audit
 check-sec:
@@ -79,5 +80,19 @@ check-sec:
 
 # Execute safety audit of dependencies
 audit-deps:
-    & "{{UV}}" run safety check
+	& "{{UV}}" run safety check
 
+# --- Native  Tauri ---
+
+# Build the Tauri NSIS desktop installer (full pipeline: frontend -> Rust -> NSIS)
+build-native:
+	$env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
+	Set-Location '{{justfile_directory()}}\native'
+	npx @tauri-apps/cli build --bundles nsis
+
+
+# Bootstrap: install dev deps + pre-commit hook
+bootstrap:
+    uv sync --group dev
+    uv run pre-commit install
+    Write-Host "Pre-commit hooks installed." -ForegroundColor Green

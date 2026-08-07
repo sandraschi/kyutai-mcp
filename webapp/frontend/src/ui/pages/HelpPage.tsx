@@ -15,7 +15,7 @@ const TABS: { id: TabId; label: string; short: string }[] = [
 function Block(props: { title: string; children: ReactNode }) {
   return (
     <div className="rounded-xl border border-white/10 bg-slate-950/35 p-4">
-      <h3 className="text-sm font-semibold text-amber-100/95">{props.title}</h3>
+      <h3 className="text-sm font-semibold text-amber-200/95">{props.title}</h3>
       <div className="mt-2 space-y-2 text-sm text-slate-300">{props.children}</div>
     </div>
   );
@@ -27,7 +27,7 @@ export function HelpPage() {
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-amber-300/25 bg-gradient-to-br from-amber-500/15 via-slate-900/40 to-sky-500/10 p-8 backdrop-blur">
-        <div className="text-xs uppercase tracking-[0.2em] text-amber-200/80">Operator manual</div>
+        <div className="text-sm uppercase tracking-[0.2em] text-amber-200/80">Operator manual</div>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-50">
           Help — kyutai-mcp dashboard
         </h1>
@@ -56,13 +56,13 @@ export function HelpPage() {
                 className={cn(
                   "shrink-0 rounded-t-lg border border-b-0 px-4 py-3 text-left transition",
                   active
-                    ? "border-amber-400/35 bg-amber-400/10 text-amber-100"
-                    : "border-transparent text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                    ? "border-amber-400/35 bg-amber-400/10 text-amber-200"
+                    : "border-transparent text-slate-300 hover:bg-white/5 hover:text-slate-200"
                 )}
                 onClick={() => setTab(t.id)}
               >
                 <div className="font-medium">{t.label}</div>
-                <div className="text-xs text-slate-500">{t.short}</div>
+                <div className="text-sm text-slate-400">{t.short}</div>
               </button>
             );
           })}
@@ -84,7 +84,7 @@ function McpTab() {
     <div className="space-y-4">
       <Block title="What the MCP server is">
         <p>
-          <span className="font-mono text-amber-100/90">kyutai-mcp</span> exposes a{" "}
+          <span className="font-mono text-amber-200/90">kyutai-mcp</span> exposes a{" "}
           <strong className="text-slate-100">FastMCP 3.1+</strong> server so Cursor, Claude Desktop, and other MCP
           clients can call Kyutai operations without reimplementing probes or subprocess glue.
         </p>
@@ -92,7 +92,7 @@ function McpTab() {
 
       <Block title="Tool: moshi_ops">
         <p>Portmanteau tool with parameter <span className="font-mono">operation</span>:</p>
-        <ul className="list-inside list-disc space-y-1 text-slate-400">
+        <ul className="list-inside list-disc space-y-1 text-slate-300">
           <li>
             <span className="font-mono text-slate-300">status</span> — server / Moshi-oriented status
           </li>
@@ -130,7 +130,7 @@ function McpTab() {
       </Block>
 
       <Block title="Prompt/skill pack (agentic workflows)">
-        <ul className="list-inside list-disc space-y-1 text-slate-400">
+        <ul className="list-inside list-disc space-y-1 text-slate-300">
           <li><span className="font-mono">voice_ack_prompt</span> — immediate spoken ack in &lt;= 18 words</li>
           <li><span className="font-mono">voice_reasoner_prompt</span> — tool-grounded final spoken answer</li>
           <li><span className="font-mono">speak_boilerplate_prompt</span> — briefing synthesis for TTS</li>
@@ -146,12 +146,12 @@ function McpTab() {
         <ul className="list-inside list-disc space-y-2">
           <li>
             <strong className="text-slate-200">Stdio</strong> — run{" "}
-            <span className="font-mono text-xs">uv run python -m kyutai_mcp</span> (or your venv equivalent) and point
+            <span className="font-mono text-sm">uv run python -m kyutai_mcp</span> (or your venv equivalent) and point
             the client at the process.
           </li>
           <li>
             <strong className="text-slate-200">HTTP</strong> — streamable MCP at{" "}
-            <span className="font-mono text-xs">http://127.0.0.1:10926/mcp</span> when the server is started with HTTP
+            <span className="font-mono text-sm">http://127.0.0.1:10926/mcp</span> when the server is started with HTTP
             transport (see repo config).
           </li>
         </ul>
@@ -170,7 +170,7 @@ function McpTab() {
             <span className="font-mono">GET /.well-known/mcp/manifest.json</span> — fleet discovery manifest.
           </li>
         </ul>
-        <p className="text-slate-400">
+        <p className="text-slate-300">
           In the UI: <Link className="text-amber-200 hover:underline" to="/apps">Apps</Link> and{" "}
           <Link className="text-amber-200 hover:underline" to="/tools">
             Tools → MCP catalog
@@ -196,12 +196,12 @@ function WebappTab() {
         <div className="overflow-x-auto rounded-lg border border-white/10 bg-slate-950/50">
           <table className="w-full min-w-[20rem] text-left text-sm">
             <thead>
-              <tr className="border-b border-white/10 text-slate-400">
+              <tr className="border-b border-white/10 text-slate-300">
                 <th className="px-3 py-2">Role</th>
                 <th className="px-3 py-2">Default</th>
               </tr>
             </thead>
-            <tbody className="font-mono text-xs text-slate-300">
+            <tbody className="font-mono text-sm text-slate-300">
               <tr className="border-b border-white/5">
                 <td className="px-3 py-2">Web backend</td>
                 <td className="px-3 py-2">10924</td>
@@ -237,10 +237,10 @@ function WebappTab() {
             ["/settings", "Settings"],
             ["/help", "Help"]
           ].map(([path, label]) => (
-            <div key={path} className="rounded-lg border border-white/10 bg-slate-950/30 px-2 py-1.5 font-mono text-xs">
-              <span className="text-amber-100/90">{path}</span>
-              <span className="text-slate-500"> — </span>
-              <span className="text-slate-400">{label}</span>
+            <div key={path} className="rounded-lg border border-white/10 bg-slate-950/30 px-2 py-1.5 font-mono text-sm">
+              <span className="text-amber-200/90">{path}</span>
+              <span className="text-slate-400"> — </span>
+              <span className="text-slate-300">{label}</span>
             </div>
           ))}
         </div>
@@ -258,7 +258,7 @@ function WebappTab() {
         <div className="overflow-x-auto rounded-lg border border-white/10 bg-slate-950/50">
           <table className="w-full min-w-[24rem] text-left text-sm">
             <thead>
-              <tr className="border-b border-white/10 text-slate-400">
+              <tr className="border-b border-white/10 text-slate-300">
                 <th className="px-3 py-2">Provider</th>
                 <th className="px-3 py-2">Probe</th>
               </tr>
@@ -266,11 +266,11 @@ function WebappTab() {
             <tbody className="text-slate-300">
               <tr className="border-b border-white/5">
                 <td className="px-3 py-2 font-mono">ollama</td>
-                <td className="px-3 py-2 font-mono text-xs">127.0.0.1:11434/api/tags</td>
+                <td className="px-3 py-2 font-mono text-sm">127.0.0.1:11434/api/tags</td>
               </tr>
               <tr>
                 <td className="px-3 py-2 font-mono">lmstudio</td>
-                <td className="px-3 py-2 font-mono text-xs">127.0.0.1:1234/v1/models</td>
+                <td className="px-3 py-2 font-mono text-sm">127.0.0.1:1234/v1/models</td>
               </tr>
             </tbody>
           </table>
@@ -288,7 +288,7 @@ function WebappTab() {
       </Block>
 
       <Block title="Shortcuts & recovery">
-        <ul className="list-inside list-disc space-y-1 text-slate-400">
+        <ul className="list-inside list-disc space-y-1 text-slate-300">
           <li>
             <span className="font-mono">Ctrl+K</span> / <span className="font-mono">Cmd+K</span> — Chat modal
           </li>
@@ -297,7 +297,7 @@ function WebappTab() {
       </Block>
 
       <Block title="Backend API (summary)">
-        <div className="grid gap-1 font-mono text-[11px] text-slate-400 sm:grid-cols-2">
+        <div className="grid gap-1 font-mono text-[11px] text-slate-300 sm:grid-cols-2">
           <span>GET /api/health</span>
           <span>GET /api/config</span>
           <span>GET /api/status</span>
@@ -316,7 +316,7 @@ function WebappTab() {
       </Block>
 
       <Block title="Usage examples">
-        <div className="space-y-3 text-xs font-mono text-slate-400">
+        <div className="space-y-3 text-xs font-mono text-slate-300">
           <pre className="overflow-auto rounded-lg border border-white/10 bg-slate-950/40 p-3">
 {`POST /api/voice/turn
 {
@@ -338,7 +338,7 @@ function WebappTab() {
       </Block>
 
       <Block title="Repo">
-        <p className="text-slate-400">
+        <p className="text-slate-300">
           <span className="font-mono">docs/WEBAPP.md</span>, <span className="font-mono">docs/GLOM.md</span>,{" "}
           <span className="font-mono">docs/VOICE_WORKFLOWS.md</span>.
         </p>
@@ -389,7 +389,7 @@ function MoshiTab() {
       </Block>
 
       <Block title="Start, status, logs">
-        <ul className="list-inside list-disc space-y-1 text-slate-400">
+        <ul className="list-inside list-disc space-y-1 text-slate-300">
           <li>
             <Link className="text-amber-200 hover:underline" to="/actions">
               Actions
@@ -407,14 +407,14 @@ function MoshiTab() {
       </Block>
 
       <Block title="Hardware & runtimes">
-        <p className="text-slate-400">
+        <p className="text-slate-300">
           Upstream supports PyTorch and Rust/CUDA paths depending on build. VRAM needs vary by checkpoint; large models
           may need a high-memory GPU. Consult Moshi’s README for the exact recipe you are running.
         </p>
       </Block>
 
       <Block title="Repo">
-        <p className="text-slate-400">
+        <p className="text-slate-300">
           <span className="font-mono">docs/MOSHI_SERVICE.md</span>
         </p>
       </Block>
@@ -443,7 +443,7 @@ function JapanAiTab() {
         <p className="text-slate-200">
           このダッシュボードは、Moshi（音声）とオプションのローカルLLM（Glom-On）をまとめて扱うためのオペレータ向けUIです。
         </p>
-        <ul className="list-inside list-disc space-y-1 text-slate-400">
+        <ul className="list-inside list-disc space-y-1 text-slate-300">
           <li>
             <strong className="text-slate-300">Moshi</strong>
             ：上流のブラウザUIでマイク→応答。音声対話は日本語でも利用可能な場合があります（上流の設定とモデルに依存）。
@@ -462,7 +462,7 @@ function JapanAiTab() {
       </Block>
 
       <Block title="Practical tips (JP-facing workflows)">
-        <ul className="list-inside list-disc space-y-2 text-slate-400">
+        <ul className="list-inside list-disc space-y-2 text-slate-300">
           <li>
             Pull a <strong className="text-slate-300">Japanese-capable</strong> chat model into Ollama/LM Studio if you
             want help text and refine in Japanese; the backend only requires a working OpenAI-compatible chat API.
@@ -480,7 +480,7 @@ function JapanAiTab() {
       </Block>
 
       <Block title="Disclaimer">
-        <p className="text-xs text-slate-500">
+        <p className="text-sm text-slate-400">
           This tab is general guidance, not legal or compliance advice. For regulated deployments, follow your
           organization’s policies and applicable law.
         </p>

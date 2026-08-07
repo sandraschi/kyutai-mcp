@@ -56,7 +56,7 @@ export function AppsPage() {
     <div className="space-y-4">
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
         <h2 className="text-xl font-semibold">Apps and discovery</h2>
-        <p className="mt-2 text-sm text-slate-400">
+        <p className="mt-2 text-sm text-slate-300">
           Fleet-facing hooks: Glama metadata, well-known MCP manifest, and the HTTP MCP endpoint this server
           exposes for clients that support streamable HTTP.
         </p>
@@ -68,14 +68,14 @@ export function AppsPage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
-          <div className="text-sm text-slate-400">Glama (repo)</div>
+          <div className="text-sm text-slate-300">Glama (repo)</div>
           {glama ? (
             <div className="mt-3 space-y-2 text-sm text-slate-200">
               <div>
-                <span className="text-slate-500">Name:</span> {glama.name ?? "—"}
+                <span className="text-slate-400">Name:</span> {glama.name ?? "—"}
               </div>
               <div>
-                <span className="text-slate-500">Version:</span> {glama.version ?? "—"}
+                <span className="text-slate-400">Version:</span> {glama.version ?? "—"}
               </div>
               <div className="text-slate-300">{glama.description ?? ""}</div>
               {glama.homepage ? (
@@ -90,34 +90,34 @@ export function AppsPage() {
               ) : null}
             </div>
           ) : (
-            <div className="mt-3 text-sm text-slate-500">No glama.json loaded (optional).</div>
+            <div className="mt-3 text-sm text-slate-400">No glama.json loaded (optional).</div>
           )}
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
-          <div className="text-sm text-slate-400">MCP HTTP (this machine)</div>
+          <div className="text-sm text-slate-300">MCP HTTP (this machine)</div>
           {mcpHttpUrl ? (
             <div className="mt-3 space-y-3 text-sm">
-              <div className="break-all font-mono text-amber-100">{mcpHttpUrl}</div>
-              <div className="text-slate-400">
+              <div className="break-all font-mono text-amber-200">{mcpHttpUrl}</div>
+              <div className="text-slate-300">
                 Use from MCP clients that support HTTP transport to <span className="font-mono">/mcp</span> on
                 this host and port.
               </div>
             </div>
           ) : (
-            <div className="mt-3 text-sm text-slate-500">Loading…</div>
+            <div className="mt-3 text-sm text-slate-400">Loading…</div>
           )}
         </div>
       </div>
 
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
-        <div className="text-sm text-slate-400">/.well-known/mcp/manifest.json</div>
+        <div className="text-sm text-slate-300">/.well-known/mcp/manifest.json</div>
         {manifest ? (
           <pre className="mt-3 max-h-80 overflow-auto rounded-lg border border-white/10 bg-slate-950/40 p-3 text-xs text-slate-200">
             {JSON.stringify(manifest, null, 2)}
           </pre>
         ) : (
-          <div className="mt-3 text-sm text-slate-500">Not available.</div>
+          <div className="mt-3 text-sm text-slate-400">Not available.</div>
         )}
       </section>
     </div>

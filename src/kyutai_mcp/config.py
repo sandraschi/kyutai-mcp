@@ -9,7 +9,9 @@ class KyutaiConfig:
     web_frontend_port: int = 10925
     mcp_http_host: str = "127.0.0.1"
     mcp_http_port: int = 10926
+    pocket_tts_port: int = 10929
+    unmute_ui_url: str = "http://127.0.0.1:3000"
+    unmute_backend_url: str = "http://127.0.0.1:8000"
 
 
 DEFAULT_CONFIG = KyutaiConfig()
-

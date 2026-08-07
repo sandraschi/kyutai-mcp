@@ -112,7 +112,7 @@ export function ActionsPage() {
     <div className="space-y-4">
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
         <h2 className="text-xl font-semibold">Action Workbench</h2>
-        <p className="mt-2 text-sm text-slate-400">
+        <p className="mt-2 text-sm text-slate-300">
           Start/stop Moshi and run curated checks without hand-building every request.
         </p>
       </section>
@@ -120,7 +120,7 @@ export function ActionsPage() {
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <div className="text-sm text-slate-400">Moshi listener/talker</div>
+            <div className="text-sm text-slate-300">Moshi listener/talker</div>
             <div className="mt-1 text-sm text-slate-200">
               This controls the upstream Moshi backend process. Configure it in Settings first.
             </div>
@@ -157,7 +157,7 @@ export function ActionsPage() {
             {JSON.stringify(moshiStatus, null, 2)}
           </pre>
         ) : (
-          <div className="mt-3 text-sm text-slate-500">No status yet. Click “Refresh status”.</div>
+          <div className="mt-3 text-sm text-slate-400">No status yet. Click “Refresh status”.</div>
         )}
       </section>
 
@@ -165,7 +165,7 @@ export function ActionsPage() {
         {ACTIONS.map((card) => (
           <div key={card.id} className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
             <div className="text-base font-semibold">{card.title}</div>
-            <div className="mt-2 text-sm text-slate-400">{card.description}</div>
+            <div className="mt-2 text-sm text-slate-300">{card.description}</div>
             <button
               type="button"
               onClick={() => runAction(card)}
@@ -179,7 +179,7 @@ export function ActionsPage() {
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
-        <div className="text-sm text-slate-400">Action Result</div>
+        <div className="text-sm text-slate-300">Action Result</div>
         {error ? (
           <div className="mt-3 rounded-lg border border-rose-400/20 bg-rose-500/10 p-3 text-sm text-rose-200">
             {error}
@@ -189,7 +189,7 @@ export function ActionsPage() {
             {JSON.stringify(result, null, 2)}
           </pre>
         ) : (
-          <div className="mt-3 text-sm text-slate-500">Run an action to view output.</div>
+          <div className="mt-3 text-sm text-slate-400">Run an action to view output.</div>
         )}
       </section>
     </div>

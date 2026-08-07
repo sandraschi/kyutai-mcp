@@ -41,23 +41,30 @@ If you prefer not to use `just`:
    ```powershell
    uv sync --all-extras
    ```
-4. Start the server:
+4. (recommended) Pre-download Moshi weights:
    ```powershell
-   # stdio mode (for MCP clients like Claude Desktop)
-   uv run python -m kyutai_mcp.server
-
-   # HTTP mode (for web dashboard)
-   uv run uvicorn kyutai_mcp.server:app --port 10924
+   just download-moshi
+   # or: uv run python tools/download_moshi_weights.py
    ```
 
-4. (optional) Start the frontend:
+5. Start the full stack (canonical launcher is under `webapp/`):
    ```powershell
-   cd webapp
-   npm install
-   npm run dev
+   .\webapp\start.bat
+   # or from repo root (delegates to webapp):
+   .\start.bat
+   # or: just start
    ```
 
-5. Open `http://localhost:10924` or the frontend URL.
+   Services:
+   - Backend REST API: `http://127.0.0.1:10924`
+   - Frontend dashboard: `http://127.0.0.1:10925`
+   - MCP HTTP transport: `http://127.0.0.1:10926/mcp`
+
+6. Stdio MCP only (for Claude Desktop / Cursor):
+   ```powershell
+   uv run python -m kyutai_mcp
+   # or: just mcp
+   ```
 
 ---
 
@@ -66,7 +73,8 @@ If you prefer not to use `just`:
 | Issue | Fix |
 |---|---|
 | `just` not found | Install via `winget install Casey.Just`, `scoop install just`, or `brew install just` |
-| Port conflict | Run `just kill-all` to clear fleet ports (10700–11000) |
+| Port conflict | Stop listeners on 10924/10925/10926, or re-run `start.bat` (clears ports automatically) |
+| `TypeError: run_stdio_async() got an unexpected keyword argument` | Update repo — FastMCP 3.2+ requires separate stdio and HTTP entrypoints |
 | Dependencies out of sync | `uv sync --all-extras` |
 | Something else | [Open a GitHub issue](https://github.com/sandraschi/kyutai-mcp/issues) |
 

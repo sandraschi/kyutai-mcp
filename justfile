@@ -14,21 +14,17 @@ default:
 
 # Install Python + frontend dependencies
 install bootstrap:
-    & "{{UV}}" sync
-    Set-Location "{{REPO}}\webapp\frontend"
-    npm install
+    & "{{UV}}" sync; Set-Location "{{REPO}}\webapp\frontend"; npm install
 
 # --- Operation ---
 
 # Start full stack (canonical: webapp/start.ps1)
 start dev web:
-    Set-Location "{{REPO}}\webapp"
-    .\start.bat
+    Set-Location "{{REPO}}\webapp"; .\start.bat
 
 # Start full stack from repo root (delegates to webapp)
 start-root:
-    Set-Location "{{REPO}}"
-    .\start.bat
+    Set-Location "{{REPO}}"; .\start.bat
 
 # Start stdio MCP server only (Claude Desktop / Cursor)
 serve mcp:
@@ -54,16 +50,11 @@ check:
 
 # Execute Ruff SOTA linting
 lint:
-    & "{{UV}}" run ruff check .
-    Set-Location '{{REPO}}\webapp\frontend'
-    npx @biomejs/biome ci .
+    & "{{UV}}" run ruff check .; Set-Location '{{REPO}}\webapp\frontend'; npx @biomejs/biome ci .
 
 # Execute Ruff fix and formatting
 fix:
-    & "{{UV}}" run ruff check . --fix --unsafe-fixes
-    & "{{UV}}" run ruff format .
-    Set-Location '{{REPO}}\webapp\frontend'
-    npx @biomejs/biome check --write .
+    & "{{UV}}" run ruff check . --fix --unsafe-fixes; & "{{UV}}" run ruff format .; Set-Location '{{REPO}}\webapp\frontend'; npx @biomejs/biome check --write .
 
 # Run pytest suite
 test:
@@ -86,9 +77,7 @@ audit-deps:
 
 # Build the Tauri NSIS desktop installer (full pipeline: frontend -> Rust -> NSIS)
 build-native:
-	$env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
-	Set-Location '{{justfile_directory()}}\native'
-	npx @tauri-apps/cli build --bundles nsis
+	$env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"; Set-Location '{{justfile_directory()}}\native'; npx @tauri-apps/cli build --bundles nsis
 
 
 # Bootstrap: install dev deps + pre-commit hook

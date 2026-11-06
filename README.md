@@ -15,6 +15,8 @@
 
 > 📖 **[Installation Guide](INSTALL.md)** — quick start, manual setup, and troubleshooting
 
+Run Kyutai Moshi locally - real-time speech conversation driven from a glass dashboard and from agent stacks via FastMCP.
+
 ### Run **Kyutai Moshi** locally. Drive it from a **glass dashboard**, and plug the same surface into your **agent stack** via **FastMCP**.
 
 [Quick start](#quick-start)  [Web UI](#web-dashboard)  [Technical docs](docs/)
